@@ -1,0 +1,1 @@
+# classe para tratar das coisas do FS_Node
