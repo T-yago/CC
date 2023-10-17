@@ -1,58 +1,65 @@
+# import socket programming library
 import socket
+
+# import thread module
+from _thread import *
 import threading
-import pickle
 
-class FSTracker:
-    def __init__(self, host, port):
-        self.host = host
-        self.port = port
-        self.clients = {}  # Dicionário para armazenar informações dos FS_Node conectados
+print_lock = threading.Lock()
 
-    def start(self):
-        server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        server_socket.bind((self.host, self.port))
-        server_socket.listen(5)
+# thread function
+def threaded(c):
+	while True:
 
-        print(f"FS_Tracker ativo em {self.host}:{self.port}.")
+		# data received from client
+		data = c.recv(1024)
+		if not data:
+			print('Bye')
+			
+			# lock released on exit
+			print_lock.release()
+			break
 
-        while True:
-            client_socket, client_address = server_socket.accept()
-            threading.Thread(target=self.handle_client, args=(client_socket,)).start()
+		# reverse the given string from client
+		data = data[::-1]
 
-    def handle_client(self, client_socket):
-        try:
-            data = client_socket.recv(1024)
-            if data:
-                message = pickle.loads(data)
-                if message['type'] == 'register':
-                    self.register_node(client_socket, message['node_info'])
-                elif message['type'] == 'update':
-                    self.update_node(message['node_info'])
-                elif message['type'] == 'locate':
-                    self.locate_file(client_socket, message['filename'])
-            client_socket.close()
-        except Exception as e:
-            print(f"Erro ao lidar com cliente: {str(e)}")
+		# send back reversed string to client
+		c.send(data)
 
-    def register_node(self, client_socket, node_info):
-        node_address = client_socket.getpeername()
-        self.clients[node_address] = node_info
-        print(f"Node {node_info['name']} registado com sucesso.")
+	# connection closed
+	c.close()
 
-    def update_node(self, node_info):
-        node_address = (node_info['ip'], node_info['port'])
-        if node_address in self.clients:
-            self.clients[node_address]['files'] = node_info['files']
-            print(f"Node {self.clients[node_address]['name']} atualizado.")
 
-    def locate_file(self, client_socket, filename):
-        locations = []
-        for address, info in self.clients.items():
-            if filename in info['files']:
-                locations.append({'name': info['name'], 'address': address})
-        response = {'type': 'location_response', 'locations': locations}
-        client_socket.send(pickle.dumps(response))
+def Main():
+    host = ""
 
-if __name__ == "__main__":
-    tracker = FSTracker('10.4.4.1', 9090)
-    tracker.start()
+    # reserve a port on your computer
+    # in our case it is 12345 but it
+    # can be anything
+    port = 12345
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.bind((host, port))
+    print("socket binded to port", port)
+
+    # put the socket into listening mode
+    s.listen(5)
+    print("socket is listening")
+
+    # a forever loop until client wants to exit
+    while True:
+
+        # establish connection with client
+        c, addr = s.accept()
+
+        # lock acquired by client
+        print_lock.acquire()
+        print('Connected to :', addr[0], ':', addr[1])
+
+        # Start a new thread and return its identifier
+        start_new_thread(threaded, (c,))
+    s.close()
+
+
+
+if __name__ == '__main__':
+	Main()
