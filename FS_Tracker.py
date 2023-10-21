@@ -8,7 +8,7 @@ import threading
 print_lock = threading.Lock()
 
 # thread function
-def threaded(c):
+def threaded(c, addr):
 	while True:
 
 		# data received from client
@@ -56,7 +56,7 @@ def Main():
         print('Connected to :', addr[0], ':', addr[1])
 
         # Start a new thread and return its identifier
-        start_new_thread(threaded, (c,))
+        start_new_thread(threaded, (c, addr,))
     s.close()
 
 
