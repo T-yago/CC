@@ -9,11 +9,11 @@ class FS_Tracker:
 	Estrutura f_incomplete = {F1: [20, [172.0.1, 61253], [193.0.1.2, 5723]]}
 	A key corresponde ao nome do ficheiro e o value correspode a uma lista em que o primeiro elemento é sempre
 	o número de pacotes em que o ficheiro está dividido e os restantes elementos correspondem aos pacotes que cada
-	FS_Node possuí e o endereço IPv4 de cada FS_Node.
+	FS_Node possui e o endereço IPv4 de cada FS_Node.
 	
 	Importante realçar que os inteiros associados aos endereços IPv4 correspondem aos pacotes que cada FS_Node possuí
 	quando convertidos para binário. Por exemplo, 61253 corresponde a 1110111101000101 em binário e, sabendo que o ficheiro está
-	dividido em 30 pacotes no total, acrescentamos 0 à esquerda até termos 20 dígitos, resultando no número 00001110111101000101.
+	dividido em 20 pacotes no total, acrescentamos 0 à esquerda até termos 20 dígitos, resultando no número 00001110111101000101.
 	Desta forma, concluímos que faltam 10 pacotes (contar os 0s) para o correspondente FS_Node ter o ficheiro completo.
 	"""
 	def __init__(self):
@@ -60,6 +60,12 @@ class FS_Tracker:
 
 	Caso o FS_Node já possuí-se o ficheiro completo e apaga um dos pacotes ou vários pacotes, então o FS_Tracker remove o FS_Node
 	da lista dos FS_Nodes com o correspondente ficheiro completo e volta a passá-lo, para o dicionário de ficheiros incompletos.
+
+	O XOR aqui é utilizado para fazer as operações de adição e remoção de pacotes de um ficheiro. Mas a informação que ele está à espera de receber do Node, não 
+    e uma atulização do ficheiro, como 00100 -> 00110, caso tenha ocurrido adição, mas sim o registo da modificação que foi feita (onde foi feita)
+	Por exemplo, 00100 -> 00010 significa que o Node fez uma alteração no 4º bit, e como sabemos que ele não tinha o 4º bit, ao realizar o XOR, o resultado será 00110.
+	Se ele já tivesse o 4º bit, por exemplo, 00110 -> 00010 signficaria remover o 4º bit, e não adicionar, logo o resultado seria 00100.
+
 	"""
 	def add_new_information(self, addr, data):
 		for (file, packet) in data:
