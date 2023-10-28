@@ -1,3 +1,5 @@
+import threading
+
 """
 Função responsável por receber e traduzir mensagens, sendo também responsável por verificar se o FS_Node ou FS_Tracker
 não fecharam a conexão quer durante a transmissão de uma mensagem ou quando não estão a transmitir. Importante referir
@@ -48,11 +50,15 @@ pretende efetuar, tendo de colocar, portanto, o campo 'mode' igual a 1.
 
 Importante salientar que caso a mensagem contenha o campo 'mode' este não é contabilizado para o tamanho da mensagem.
 """
-def send_message(c, message, mode, id_mode=None):
+def send_message(c, send_lock, message, mode, id_mode=None):
     message_length = len(message)
     length_bytes = message_length.to_bytes(4, byteorder='big')
     if (mode):
         id_mode_bytes = id_mode.to_bytes(4, byteorder='big')
+        send_lock.acquire()
         c.sendall(length_bytes + id_mode_bytes + message.encode('utf-8'))
+        send_lock.release()
     else:
+        send_lock.acquire()
         c.sendall(length_bytes + message.encode('utf-8'))
+        send_lock.release()

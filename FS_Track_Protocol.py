@@ -1,14 +1,16 @@
+import threading
 
 class FS_Tracker():
 
 	"""
-	Estrutura f_complete = {F1: [20, 172.0.1, 193.0.1.2]}
+	Estrutura f_complete = {F1: [LOCK, 20, 172.0.1, 193.0.1.2]}
 	A key corresponde ao nome do ficheiro e o value corresponde a uma lista dos endereços IPv4 dos FS_Nodes que
-	possuem esse ficheiro completo, sendo o primeiro elemento da lista o número de pacotes que compõem o ficheiro.
+	possuem esse ficheiro completo, sendo o primeiro elemento da lista um lock para controlar as leituras e escritas,
+	e o segundo elemento o número de pacotes que compõem o ficheiro.
 
-	Estrutura f_incomplete = {F1: [20, [172.0.1, 61253], [193.0.1.2, 5723]]}
-	A key corresponde ao nome do ficheiro e o value correspode a uma lista em que o primeiro elemento é sempre
-	o número de pacotes em que o ficheiro está dividido e os restantes elementos correspondem aos pacotes que cada
+	Estrutura f_incomplete = {F1: [LOCK, 20, [172.0.1, 61253], [193.0.1.2, 5723]]}
+	A key corresponde ao nome do ficheiro e o value correspode a uma lista em que o primeiro elemento é um lock para controlar as leituras e escritas
+	e o segundo é sempre o número de pacotes em que o ficheiro está dividido e os restantes elementos correspondem aos pacotes que cada
 	FS_Node possui e o endereço IPv4 de cada FS_Node.
 	
 	Importante realçar que os inteiros associados aos endereços IPv4 correspondem aos pacotes que cada FS_Node possuí
@@ -19,9 +21,15 @@ class FS_Tracker():
 	def __init__(self):
 		self.f_complete = {}
 		self.f_incomplete = {}
+		self.lock = threading.Lock()
 	
 	"""
 	Adiciona a informação de um novo FS_Node às estruturas do FS_Tracker (ficheiros ou partes de ficheiros que este possuí).
+
+	Importante realçar que o lock do FS_Tracker é usado para prevenir que dois FS_Nodes tentem criar o mesmo ficheiro ao mesmo tempo
+	quando este ainda não existia no FS_Tracker. De igual modo, os locks de escrita são usados para prevenir que dois ou mais FS_Nodes
+	tentem adicionar informações ao mesmo tempo na lista de informações do ficheiro, evitando, por exemplo, que escrevam na mesma posição
+	da lista.
 	"""
 	def handle_data(self, addr, data):
 
@@ -36,17 +44,22 @@ class FS_Tracker():
 		Se for incompleto -> {file: (15, 12345)}
 		"""
 		for (file, packet) in data:
+
 			# Adiciona o ficheiro caso este seja novo na base de dados e insere logo o tamanho do ficheiro na primeira posição das listas
+			self.lock.acquire()
 			if file not in self.f_complete:
-				self.f_complete[file] = [packet[0]]
-				self.f_incomplete[file] = [packet[0]]
+				self.f_complete[file] = [ReentrantRWLock(), packet[0]]
+				self.f_incomplete[file] = [ReentrantRWLock(), packet[0]]
+			self.lock.release()
 			
 			# Verifica se o Node possuí o ficheiro completo
 			if packet[1] == -1:
-				self.complete[file].append(addr)
+				with self.f_complete[file][0].w_locked():
+					self.f_complete[file].append(addr)
 			# Adiciona um novo ficheiro incompleto caso contrário
 			else:
-				self.f_incomplete[file].append([addr, packet[1]])
+				with self.f_incomplete[file][0].w_locked():
+					self.f_incomplete[file].append([addr, packet[1]])
 	
 	"""
 	Função responsável por atualizar os ficheiros e pacotes de ficheiros que um FS_Node possuí. Esta pode
@@ -65,62 +78,80 @@ class FS_Tracker():
     é uma atulização do ficheiro, como 00100 -> 00110, caso tenha ocurrido adição, mas sim o registo da modificação que foi feita (onde foi feita)
 	Por exemplo, 00100 -> 00010 significa que o Node fez uma alteração no 4º bit, e como sabemos que ele não tinha o 4º bit, ao realizar o XOR, o resultado será 00110.
 	Se ele já tivesse o 4º bit, por exemplo, 00110 -> 00010 signficaria remover o 4º bit, e não adicionar, logo o resultado seria 00100.
+
+	Em relação aos locks, o lock do FS_Tracker é usado para evitar o mesmo que na função handle_data, que é dois ou mais FS_Nodes
+	tentarem criar o mesmo ficheiro ao mesmo tempo quando este ainda não existia no FS_Tracker. Por sua vez, os locks de escrita, que cada key
+	do dicionário possuí, são usados para assegurar que quando estamos a fazer alterações relativamente aos pacotes que um FS_Node possuí de um ficheiro, a
+	localização dessa informação (indíce na lista associada ao ficheiro) não se altera. Isso poderia acontecer, caso não usassemos locks de escrita e, por exemplo,
+	outra thread removesse um FS_Node do mesmo ficheiro que estavamos a alterar, podendo assim alterar o indíce da lista referente ao FS_Node que estavamos
+	a alterar.
 	"""
 	def update_information(self, addr, data):
 		for (file, packet) in data:
+			
+			self.lock.acquire()
 			if file in self.f_complete:
-
+				self.lock.release()
+				
 				# Verifica se o FS_Node já possuía alguma informação relativa aquele ficheiro
 				if addr not in self.f_complete[file]:
-
-					index = addr_has_packets(file, addr)
-					if index == -1:
-						# Verifica se o ficheiro está completo
-						if (packet[1] == -1):
-							self.complete[file].append(addr)
+					
+					with self.f_incomplete[file][0].w_locked():
+						index = addr_has_packets(file, addr)
+						if index == -1:
+							# Verifica se o ficheiro está completo
+							if (packet[1] == -1):
+								self.complete[file].append(addr)
+							else:
+								self.f_incomplete[file].append([addr, packet[1]])
+							self.lock.release()
 						else:
-							self.f_incomplete[file].append([addr, packet[1]])
-					else:
-						# Realizar a operação de ou exclusivo para fazer as adições e/ou deleções de pacotes de um ficheiro
-						xor = self.f_incomplete[file][index][1] ^ packet[1]
-						if (xor==0):
-							del self.f_incomplete[file][index]
-						else if (xor==pow(2, 8 * packet[0]) - 1):
-							del self.f_incomplete[file][index]
-							self.complete[file].append(addr)
-						else:
-							self.f_incomplete[file][index][1] = xor
+							# Realizar a operação de ou exclusivo para fazer as adições e/ou deleções de pacotes de um ficheiro
+							xor = self.f_incomplete[file][index][1] ^ packet[1]
+							if (xor==0):
+								del self.f_incomplete[file][index]
+							else if (xor==pow(2, 8 * packet[0]) - 1):
+								del self.f_incomplete[file][index]
+								self.complete[file].append(addr)
+							else:
+								self.f_incomplete[file][index][1] = xor
 				else:
 					if packet[1] == -1:
-						self.f_complete[file].remove(addr)
+						with self.f_complete[file][0].w_locked():
+							self.f_complete[file].remove(addr)
 					else:
 						# Realizar a operação de ou exclusivo para fazer as deleções de pacotes de um ficheiro completo
 						file_complete = pow(2, 8 * packet[0]) - 1
 						xor = file_complete ^ packet[1]
 
 						# Passar para o dicionário de ficheiros incompletos
-						self.f_complete[file].remove(addr)
-						self.f_incomplete[file].append([addr, xor])
+						with self.f_complete[file][0].w_locked():
+							self.f_complete[file].remove(addr)
+							with self.f_incomplete[file][0].w_locked():
+								self.f_incomplete[file].append([addr, xor])
 
 			# Adicionar a informação caso o FS_Node não tivesse nada relativo aquele ficheiro
 			else:
-				self.f_complete[file] = [packet[0]]
-				self.f_incomplete[file] = [packet[0]]
+				self.f_complete[file] = [ReentrantRWLock(), packet[0]]
+				self.f_incomplete[file] = [ReentrantRWLock(), packet[0]]
+				self.lock.release()
 
 				# Verifica se o Node possuí o ficheiro completo
 				if packet[1] == -1:
-					self.complete[file].append(addr)
+					with self.complete[file][0].w_locked:
+						self.complete[file].append(addr)
 				# Adiciona um novo ficheiro incompleto caso contrário
 				else:
-					self.f_incomplete[file].append([addr, packet[1]])
+					with self.f_incomplete[file][0].w_locked:
+						self.f_incomplete[file].append([addr, packet[1]])
 	
 	"""
 	Verifica se o FS_Node já tem pacotes de um determinado ficheiro
 	"""
 	def addr_has_packets(self, file, addr):
-		for i in range(len(self.f_incomplete[file])-1):
-			if (self.f_incomplete[file][i+1][0] == addr):
-				return i+1
+		for i in range(len(self.f_incomplete[file])-2):
+			if (self.f_incomplete[file][i+2][0] == addr):
+				return i+2
 		return -1
 
 
@@ -129,6 +160,9 @@ class FS_Tracker():
 	os tuplos são compostos por dois elementos em que o primeiro elemento é o endereço IPv4 do FS_Node que
 	possuí pacotes do ficheiro solicitado e o segundo argumento são os pacotes correspondentes que possuí. Quando
 	o caMpo dos pacotes que possuí for igual a -1, significa que o FS_Node contêm o ficheiro completo.
+
+	Os locks de leitura, servem para impedir que funções que alterem as informações do ficheiros, alterem essa informação
+	enquanto estamos a ler, prevenindo que apareça resultados errados.
 	"""
 	def get_file_owners(self, file):
 		lista = []
@@ -138,27 +172,34 @@ class FS_Tracker():
 			return lista
 		else:
 
+			lista.append(self.f_complete[file][1])
 			# Percorre os FS_Nodes com o ficheiro completo
-			for node in self.f_complete[file]:
-				lista.append((node, -1))
+			with self.f_complete[file][0].r_locked():
+				for node in self.f_complete[file][2:]:
+					lista.append((node, -1))
 
 			# Percorre os FS_Nodes com o ficheiro incompleto
-			for node in self.f_incomplete[file]-1:
-				lista.append(tuple(node))
+			with self.f_incomplete[file][0].r_locked():
+				for node in self.f_incomplete[file][2:]:
+					lista.append(tuple(node))
 		
 		return lista
 
 	"""
-	Remove os dados relacionados a um FS_Node
+	Remove os dados relacionados a um FS_Node.
+
+	Locks são responsáveis por evitar leituras nas localizações que estamos a alterar.
 	"""
 	def remove_FS_node(self, addr):
 
 		for file in self.f_complete:
-			if addr in self.f_complete[file]:
-				self.f_complete[file].remove(addr)
+			with self.f_complete[file][0].w_locked():
+				if addr in self.f_complete[file]:
+					self.f_complete[file].remove(addr)
 		
 		for file in self.f_incomplete:
-			index = addr_has_packets(file, addr)
-			if index != -1:
-				del self.f_incomplete[file][index]
+			with self.f_incomplete[file][0].w_locked():
+				index = addr_has_packets(file, addr)
+				if index != -1:
+					del self.f_incomplete[file][index]
 
