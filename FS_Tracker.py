@@ -33,6 +33,8 @@ def client_thread(c, addr, FS_Tracker):
                 else if (message[0]==1):
                     response = FS_Tracker.update_information(addr, message[1])
                     send_message(c, "UPDATED.", False)
+            else:
+                break
     }
 
 	# Fechar a conexão
