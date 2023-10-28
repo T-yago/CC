@@ -1,44 +1,39 @@
 import socket
-import pickle
-
-# import thread module
 from _thread import *
 import threading
+import Message_Protocols
 
-print_lock = threading.Lock()
+"""
+Para cada conexão estabelecida entre o FS_Tracker e um cliente, é criada uma nova thread que é responsável por gerir essa conexão,
+nomeadamente converter as mensagens de binário para os seus tipos de dados correspondentes e invocar as funções necessárias para
+satisfazer os pedidos do cliente. Estas são ainda responsáveis, por assegurar que o cliente faz um pedido que o servidor pode satisfazer,
+sendo estes 2 pedidos possíveis, pedir um ficheiro (0) e atualizar dados de um ficheiro (1). As respostas do servidor para os clientes, são
+igualmente convertidas para binário para serem enviadas na rede.
 
-# Cliente começa por enviar os ficheiros ou partes de ficheiros que possuí na forma 
-def threaded(c, addr, FS_Tracker):
+No caso de o cliente fazer 2 pedidos ou mais consecutivamente, chegando a primeira mensagem e outras ou partes de outras ao buffer do socket
+antes que a thread as consiga ler, é importante termos em atenção o tamanho das mensagens, assegurando que não misturamos mensagens. Desta forma,
+os primeiros 4 bytes de todas as mensagens correspondem sempre a 1 inteiro de 4 bytes, que indica o tamanho da mensagem.
+"""
+def client_thread(c, addr, FS_Tracker):
 
-    # Receber ficheiros que o FS_Node possuí
-    size_files_FS_Node = pickle.loads(c.recv(4))
-    files_FS_Node = pickle.loads(c.recv(size_files_FS_Node))
-    FS_Tracker.handle_data(addr, files_FS_Node)
+    # Recebe os ficheiros que o FS_Node possuí. Devolve -1 caso o cliente tenha fechado a conexão.
+    message = recieve_message(c, 0)
 
-	while True:
+    if (message!=-1) {
+        FS_Tracker.handle_data(addr, message)
 
-		size_data = pickle.loads(c.recv(4))
-		if not size_data:
-            print_lock.acquire()
-			print('Bye '+ addr)
-			print_lock.release()
+        while True:
 
-			break
+            message = recieve_message(c, 1)
 
-
-        data_FS_Node = pickle.loads(c.recv(size_data))
-
-        if (data_FS_Node[0].lower()=="get"):
-            response = FS_Tracker.get_file_owners(data_FS_Node[1])
-            serialized_response = pickle.dumps(response)
-            bytes_packet = len(serialized_response)
-
-            c.sendall(serialized_response)
-        else if (data_FS_Node[0].lower()=="update"):
-            response = FS_Tracker.update_information(addr, data_FS_Node[1])
-            """
-            c.sendall(pickle.dumps("UPDATED."))
-            """
+            if (message!=-1):
+                if (message[0]==0):
+                    response = FS_Tracker.get_file_owners(message[1])
+                    send_message(c, response, False)
+                else if (message[0]==1):
+                    response = FS_Tracker.update_information(addr, message[1])
+                    send_message(c, "UPDATED.", False)
+    }
 
 	# Fechar a conexão
 	c.close()
@@ -74,7 +69,7 @@ def Main():
         print_lock.release()
 
         # Start a new thread and return its identifier
-        start_new_thread(threaded, (c, addr, FS_Tracker))
+        start_new_thread(client_thread, (c, addr, FS_Tracker))
     s.close()
 
 
