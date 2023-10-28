@@ -1,5 +1,5 @@
 
-class FS_Tracker:
+class FS_Tracker():
 
 	"""
 	Estrutura f_complete = {F1: [20, 172.0.1, 193.0.1.2]}
@@ -9,11 +9,11 @@ class FS_Tracker:
 	Estrutura f_incomplete = {F1: [20, [172.0.1, 61253], [193.0.1.2, 5723]]}
 	A key corresponde ao nome do ficheiro e o value correspode a uma lista em que o primeiro elemento é sempre
 	o número de pacotes em que o ficheiro está dividido e os restantes elementos correspondem aos pacotes que cada
-	FS_Node possui e o endereço IPv4 de cada FS_Node.
+	FS_Node possuí e o endereço IPv4 de cada FS_Node.
 	
 	Importante realçar que os inteiros associados aos endereços IPv4 correspondem aos pacotes que cada FS_Node possuí
 	quando convertidos para binário. Por exemplo, 61253 corresponde a 1110111101000101 em binário e, sabendo que o ficheiro está
-	dividido em 20 pacotes no total, acrescentamos 0 à esquerda até termos 20 dígitos, resultando no número 00001110111101000101.
+	dividido em 30 pacotes no total, acrescentamos 0 à esquerda até termos 20 dígitos, resultando no número 00001110111101000101.
 	Desta forma, concluímos que faltam 10 pacotes (contar os 0s) para o correspondente FS_Node ter o ficheiro completo.
 	"""
 	def __init__(self):
@@ -60,14 +60,8 @@ class FS_Tracker:
 
 	Caso o FS_Node já possuí-se o ficheiro completo e apaga um dos pacotes ou vários pacotes, então o FS_Tracker remove o FS_Node
 	da lista dos FS_Nodes com o correspondente ficheiro completo e volta a passá-lo, para o dicionário de ficheiros incompletos.
-
-	O XOR aqui é utilizado para fazer as operações de adição e remoção de pacotes de um ficheiro. Mas a informação que ele está à espera de receber do Node, não 
-    e uma atulização do ficheiro, como 00100 -> 00110, caso tenha ocurrido adição, mas sim o registo da modificação que foi feita (onde foi feita)
-	Por exemplo, 00100 -> 00010 significa que o Node fez uma alteração no 4º bit, e como sabemos que ele não tinha o 4º bit, ao realizar o XOR, o resultado será 00110.
-	Se ele já tivesse o 4º bit, por exemplo, 00110 -> 00010 signficaria remover o 4º bit, e não adicionar, logo o resultado seria 00100.
-
 	"""
-	def add_new_information(self, addr, data):
+	def update_information(self, addr, data):
 		for (file, packet) in data:
 			if file in self.f_complete:
 
@@ -84,7 +78,13 @@ class FS_Tracker:
 					else:
 						# Realizar a operação de ou exclusivo para fazer as adições e/ou deleções de pacotes de um ficheiro
 						xor = self.f_incomplete[file][index][1] ^ packet[1]
-						self.f_incomplete[file][index][1] = xor
+						if (xor==0):
+							del self.f_incomplete[file][index]
+						else if (xor==pow(2, 8 * packet[0]) - 1):
+							del self.f_incomplete[file][index]
+							self.complete[file].append(addr)
+						else:
+							self.f_incomplete[file][index][1] = xor
 				else:
 					if packet[1] == -1:
 						self.f_complete[file].remove(addr)
@@ -125,7 +125,7 @@ class FS_Tracker:
 	possuí pacotes do ficheiro solicitado e o segundo argumento são os pacotes correspondentes que possuí. Quando
 	o caMpo dos pacotes que possuí for igual a -1, significa que o FS_Node contêm o ficheiro completo.
 	"""
-	def return_file_owners(self, file):
+	def get_file_owners(self, file):
 		lista = []
 
 		# Verificar se o ficheiro já existiu na rede
@@ -156,3 +156,4 @@ class FS_Tracker:
 			index = addr_has_packets(file, addr)
 			if index != -1:
 				del self.f_incomplete[file][index]
+
