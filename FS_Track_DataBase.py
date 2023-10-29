@@ -40,26 +40,26 @@ class FS_Tracker():
 		
 		Exemplos:
 		
-		Se o ficheiro for completo -> {file: (10, -1)},
-		Se for incompleto -> {file: (15, 12345)}
+		Se o ficheiro for completo -> [(file_name, 10, -1),...],
+		Se for incompleto -> [(file_name, 15, 12345),...]
 		"""
-		for (file, packet) in data:
+		for file in data:
 
 			# Adiciona o ficheiro caso este seja novo na base de dados e insere logo o tamanho do ficheiro na primeira posição das listas
 			self.lock.acquire()
-			if file not in self.f_complete:
-				self.f_complete[file] = [ReentrantRWLock(), packet[0]]
-				self.f_incomplete[file] = [ReentrantRWLock(), packet[0]]
+			if file[0] not in self.f_complete:
+				self.f_complete[file[0]] = [ReentrantRWLock(), file[1]]
+				self.f_incomplete[file[0]] = [ReentrantRWLock(), file[1]]
 			self.lock.release()
 			
 			# Verifica se o Node possuí o ficheiro completo
-			if packet[1] == -1:
-				with self.f_complete[file][0].w_locked():
-					self.f_complete[file].append(addr)
+			if file[2] == -1:
+				with self.f_complete[file[0]][0].w_locked():
+					self.f_complete[file[0]].append(addr)
 			# Adiciona um novo ficheiro incompleto caso contrário
 			else:
-				with self.f_incomplete[file][0].w_locked():
-					self.f_incomplete[file].append([addr, packet[1]])
+				with self.f_incomplete[file[0]][0].w_locked():
+					self.f_incomplete[file[0]].append([addr, file[2]])
 	
 	"""
 	Função responsável por atualizar os ficheiros e pacotes de ficheiros que um FS_Node possuí. Esta pode
@@ -87,63 +87,63 @@ class FS_Tracker():
 	a alterar.
 	"""
 	def update_information(self, addr, data):
-		for (file, packet) in data:
+		for file in data:
 			
 			self.lock.acquire()
-			if file in self.f_complete:
+			if file[0] in self.f_complete:
 				self.lock.release()
 				
 				# Verifica se o FS_Node já possuía alguma informação relativa aquele ficheiro
-				if addr not in self.f_complete[file]:
+				if addr not in self.f_complete[file[0]]:
 					
-					with self.f_incomplete[file][0].w_locked():
-						index = addr_has_packets(file, addr)
+					with self.f_incomplete[file[0]][0].w_locked():
+						index = addr_has_packets(file[0], addr)
 						if index == -1:
 							# Verifica se o ficheiro está completo
 							if (packet[1] == -1):
-								self.complete[file].append(addr)
+								self.complete[file[0]].append(addr)
 							else:
-								self.f_incomplete[file].append([addr, packet[1]])
+								self.f_incomplete[file[0]].append([addr, file[2]])
 							self.lock.release()
 						else:
 							# Realizar a operação de ou exclusivo para fazer as adições e/ou deleções de pacotes de um ficheiro
-							xor = self.f_incomplete[file][index][1] ^ packet[1]
+							xor = self.f_incomplete[file[0]][index][1] ^ file[2]
 							if (xor==0):
-								del self.f_incomplete[file][index]
-							else if (xor==pow(2, 8 * packet[0]) - 1):
-								del self.f_incomplete[file][index]
-								self.complete[file].append(addr)
+								del self.f_incomplete[file[0]][index]
+							else if (xor==pow(2, 8 * file[1]) - 1):
+								del self.f_incomplete[file[0]][index]
+								self.complete[file[0]].append(addr)
 							else:
-								self.f_incomplete[file][index][1] = xor
+								self.f_incomplete[file[0]][index][1] = xor
 				else:
-					if packet[1] == -1:
-						with self.f_complete[file][0].w_locked():
-							self.f_complete[file].remove(addr)
+					if file[2] == -1:
+						with self.f_complete[file[0]][0].w_locked():
+							self.f_complete[file[0]].remove(addr)
 					else:
 						# Realizar a operação de ou exclusivo para fazer as deleções de pacotes de um ficheiro completo
-						file_complete = pow(2, 8 * packet[0]) - 1
-						xor = file_complete ^ packet[1]
+						file_complete = pow(2, 8 * file[1]) - 1
+						xor = file_complete ^ file[2]
 
 						# Passar para o dicionário de ficheiros incompletos
-						with self.f_complete[file][0].w_locked():
-							self.f_complete[file].remove(addr)
-							with self.f_incomplete[file][0].w_locked():
-								self.f_incomplete[file].append([addr, xor])
+						with self.f_complete[file[0]][0].w_locked():
+							self.f_complete[file[0]].remove(addr)
+							with self.f_incomplete[file[0]][0].w_locked():
+								self.f_incomplete[file[0]].append([addr, xor])
 
 			# Adicionar a informação caso o FS_Node não tivesse nada relativo aquele ficheiro
 			else:
-				self.f_complete[file] = [ReentrantRWLock(), packet[0]]
-				self.f_incomplete[file] = [ReentrantRWLock(), packet[0]]
+				self.f_complete[file[0]] = [ReentrantRWLock(), file[1]]
+				self.f_incomplete[file[0]] = [ReentrantRWLock(), file[1]]
 				self.lock.release()
 
 				# Verifica se o Node possuí o ficheiro completo
-				if packet[1] == -1:
-					with self.complete[file][0].w_locked:
-						self.complete[file].append(addr)
+				if file[2] == -1:
+					with self.complete[file[0]][0].w_locked:
+						self.complete[file[0]].append(addr)
 				# Adiciona um novo ficheiro incompleto caso contrário
 				else:
-					with self.f_incomplete[file][0].w_locked:
-						self.f_incomplete[file].append([addr, packet[1]])
+					with self.f_incomplete[file[0]][0].w_locked:
+						self.f_incomplete[file[0]].append([addr, file[2]])
 	
 	"""
 	Verifica se o FS_Node já tem pacotes de um determinado ficheiro
