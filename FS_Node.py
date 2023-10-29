@@ -42,9 +42,3 @@ class FS_Node:
 			print(f"Connection error: {ce}")
 		except Exception as e:
 			print(f"An error occurred: {e}")
-			
-		
-
-	
-	
-	
