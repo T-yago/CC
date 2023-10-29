@@ -1,42 +1,50 @@
-# Import socket module
 import socket
 
+class FS_Node:
+	def __init__(self,address):
+		self.addr = address
+		self.files = {}
+		self.peers = {}
 
-def Main():
-	# local host IP '127.0.0.1'
-	host = '127.0.0.1'
+	def get_files(self):
+		files = {}
+		for file in self.files:
+			files[file] = self.files[file]
+		return files
 
-	# Define the port on which you want to connect
-	port = 12345
+	def get_addr(self):
+		return self.addr
 
-	s = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+	def set_addr(self, addr):
+		self.addr = addr
 
-	# connect to server on local computer
-	s.connect((host,port))
+	def add_file(self, file, num_packets, packets_owned):
+		self.files[file] = (num_packets, packets_owned)
 
-	# message you send to server
-	message = "shaurya says geeksforgeeks"
-	while True:
+	"""
+	Cria uma conexão entre o node e o servidor (TCP) e informa o servidor dos ficheiros que tem
+	"""
+	def conn_server(self, server_ip, server_port):
+		s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+		s.connect((server_ip, server_port))
+		s.send_data(self.files)
 
-		# message sent to server
-		s.send(message.encode('ascii'))
 
-		# message received from server
-		data = s.recv(1024)
+	"""
+	"""
+	def send_data(self, files):
+		try:
+			if not s:
+				raise ConnectionError("Socket is not connected to the server yet")
+			# Send the data
+			s.send(files)
+		except ConnectionError as ce:	
+			print(f"Connection error: {ce}")
+		except Exception as e:
+			print(f"An error occurred: {e}")
+			
+		
 
-		# print the received message
-		# here it would be a reverse of sent message
-		print('Received from the server :',str(data.decode('ascii')))
-
-		# ask the client whether he wants to continue
-		ans = input('\nDo you want to continue(y/n) :')
-		if ans == 'y':
-			continue
-		else:
-			break
-	# close the connection
-	s.close()
-
-if __name__ == '__main__':
-	Main()
-
+	
+	
+	

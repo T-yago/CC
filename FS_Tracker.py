@@ -85,7 +85,7 @@ def client_thread(c, addr, FS_Tracker):
     }
 
 	# Fechar a conexão
-	c.close()
+    c.close()
 
 
 
@@ -133,7 +133,6 @@ def Main():
         thread.Start()
     
     s.close()
-
 
 
 if __name__ == '__main__':
