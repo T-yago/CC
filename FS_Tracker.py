@@ -1,5 +1,6 @@
 import socket
 import threading
+from FS_Track_DataBase import FS_Tracker_DataBase
 import Message_Protocols
 
 
@@ -26,9 +27,9 @@ def thread_for_store(FS_Tracker_DB, c, condition, data_to_store, addr, send_lock
             message = data_to_store.pop(0)
         if (message[0]==-1):
             FS_Tracker_DB.handle_data(addr, message)
-        else if (message[0]==1):
+        elif (message[0]==1):
             response = FS_Tracker_DB.update_information(addr, message[1])
-            send_message(c, send_lock, "UPDATED.", False)
+            Message_Protocols.send_message(c, send_lock, "UPDATED.", False)
 
 """
 Para cada conexão estabelecida entre o FS_Tracker e um cliente, é criada uma nova thread que é responsável por gerir essa conexão,
@@ -44,8 +45,8 @@ os primeiros 4 bytes de todas as mensagens correspondem sempre a 1 inteiro de 4 
 def request_Thread(c, addr, FS_Tracker_DB, message, send_lock, data_to_store, condition):
     if (message[0]==0):
         response = FS_Tracker_DB.get_file_owners(message[1])
-        send_message(c, send_lock, response, False)
-    else if (message[0]==1):
+        Message_Protocols.send_message(c, send_lock, response, False)
+    elif (message[0]==1):
         with condition:
             data_to_store.append(message)
             condition.notify()
@@ -67,22 +68,21 @@ def client_thread(c, addr, FS_Tracker_DB):
     thread.Start()
 
     # Recebe os ficheiros que o FS_Node possuí. Devolve -1 caso o cliente tenha fechado a conexão.
-    message = recieve_message(c, 0)
+    message = Message_Protocols.recieve_message(c, 0)
 
-    if (message!=-1) {
+    if (message!=-1):
         data_to_store.append((-1,message))
         condition.notify()
 
         while True:
 
-            message = recieve_message(c, 1)
+            message = Message_Protocols.recieve_message(c, 1)
 
             if (message!=-1):
                 thread = threading.Thread(target=request_Thread, args=(c, addr, FS_Tracker_DB, message, send_lock, data_to_store, condition))
                 thread.Start()
             else:
                 break
-    }
 
 	# Fechar a conexão
     c.close()
@@ -112,7 +112,7 @@ def Main():
 
 
 
-    # Inícia o protocolo do servidor e o lock associado ao mesmo
+    # Inícia a base de dados do servidor e o lock associado ao mesmo
     FS_Tracker_DB = FS_Tracker_DataBase()
 
     # a forever loop until client wants to exit
