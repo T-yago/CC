@@ -1,6 +1,6 @@
 import threading
 
-class FS_Tracker():
+class FS_Tracker_DataBase():
 
 	"""
 	Estrutura f_complete = {F1: [LOCK, 20, 172.0.1, 193.0.1.2]}

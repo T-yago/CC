@@ -18,16 +18,16 @@ que realizam os pedidos escrevem para esta lista partilhada caso o pedido do FS_
 interação do FS_Node com o FS_Tracker, sendo necessário executar a função handle_data(), estando identificada com o identificador -1.
 Por sua vez, pedidos que envolvam atualizações dos dados do cliente são identificados com o inteiro 1.
 """
-def thread_for_store(FS_Tracker, c, condition, data_to_store, addr, send_lock):
+def thread_for_store(FS_Tracker_DB, c, condition, data_to_store, addr, send_lock):
     while True:
         with condition:
             if len(data_to_store) == 0:
                 condition.wait()
             message = data_to_store.pop(0)
         if (message[0]==-1):
-            FS_Tracker.handle_data(addr, message)
+            FS_Tracker_DB.handle_data(addr, message)
         else if (message[0]==1):
-            response = FS_Tracker.update_information(addr, message[1])
+            response = FS_Tracker_DB.update_information(addr, message[1])
             send_message(c, send_lock, "UPDATED.", False)
 
 """
@@ -41,9 +41,9 @@ No caso de o cliente fazer 2 pedidos ou mais consecutivamente, chegando a primei
 antes que a thread as consiga ler, é importante termos em atenção o tamanho das mensagens, assegurando que não misturamos mensagens. Desta forma,
 os primeiros 4 bytes de todas as mensagens correspondem sempre a 1 inteiro de 4 bytes, que indica o tamanho da mensagem.
 """
-def request_Thread(c, addr, FS_Tracker, message, send_lock, data_to_store, condition):
+def request_Thread(c, addr, FS_Tracker_DB, message, send_lock, data_to_store, condition):
     if (message[0]==0):
-        response = FS_Tracker.get_file_owners(message[1])
+        response = FS_Tracker_DB.get_file_owners(message[1])
         send_message(c, send_lock, response, False)
     else if (message[0]==1):
         with condition:
@@ -54,7 +54,7 @@ def request_Thread(c, addr, FS_Tracker, message, send_lock, data_to_store, condi
 Função responsável por gerir os pedidos e as respostas de um FS_Node, criando uma thread por cada mensagem completa
 recebida pelo FS_Tracker de um determinado FS_Node.
 """
-def client_thread(c, addr, FS_Tracker):
+def client_thread(c, addr, FS_Tracker_DB):
 
     # Lock para impedir duas escritas consecutivas no mesmo socket buffer
     send_lock = threading.Lock()
@@ -63,7 +63,7 @@ def client_thread(c, addr, FS_Tracker):
     data_to_store = []
     lock = threading.Lock()
     condition = threading.Condition(lock)
-    thread = threading.Thread(target=thread_for_store, args=(FS_Tracker, c, condition, data_to_store, addr, send_lock))
+    thread = threading.Thread(target=thread_for_store, args=(FS_Tracker_DB, c, condition, data_to_store, addr, send_lock))
     thread.Start()
 
     # Recebe os ficheiros que o FS_Node possuí. Devolve -1 caso o cliente tenha fechado a conexão.
@@ -78,7 +78,7 @@ def client_thread(c, addr, FS_Tracker):
             message = recieve_message(c, 1)
 
             if (message!=-1):
-                thread = threading.Thread(target=request_Thread, args=(c, addr, FS_Tracker, message, send_lock, data_to_store, condition))
+                thread = threading.Thread(target=request_Thread, args=(c, addr, FS_Tracker_DB, message, send_lock, data_to_store, condition))
                 thread.Start()
             else:
                 break
@@ -113,7 +113,7 @@ def Main():
 
 
     # Inícia o protocolo do servidor e o lock associado ao mesmo
-    FS_Tracker = FS_Tracker()
+    FS_Tracker_DB = FS_Tracker_DataBase()
 
     # a forever loop until client wants to exit
     while True:
@@ -129,7 +129,7 @@ def Main():
         """
 
         # Cria uma thread que será responsável por gerrir a comunicação entre o FS_Tracker e um FS_Node
-        thread = threading.Thread(target=client_thread, args=(c, addr, FS_Tracker))
+        thread = threading.Thread(target=client_thread, args=(c, addr, FS_Tracker_DB))
         thread.Start()
     
     s.close()
