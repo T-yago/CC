@@ -26,7 +26,7 @@ def thread_for_store(FS_Tracker_DB, c, condition, data_to_store, addr, send_lock
             message = data_to_store.pop(0)
         if (message[0]==-1):
             FS_Tracker_DB.handle_data(addr, message)
-        else if (message[0]==1):
+        elif (message[0]==1):
             response = FS_Tracker_DB.update_information(addr, message[1])
             send_message(c, send_lock, "UPDATED.", False)
 
@@ -45,7 +45,7 @@ def request_Thread(c, addr, FS_Tracker_DB, message, send_lock, data_to_store, co
     if (message[0]==0):
         response = FS_Tracker_DB.get_file_owners(message[1])
         send_message(c, send_lock, response, False)
-    else if (message[0]==1):
+    elif (message[0]==1):
         with condition:
             data_to_store.append(message)
             condition.notify()
@@ -105,7 +105,7 @@ def Main():
     print("socket is listening")
 
 
-
+    
 
 
 
