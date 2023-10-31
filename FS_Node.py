@@ -4,7 +4,6 @@ class FS_Node:
 	def __init__(self,address):
 		self.addr = address
 		self.files = {}
-		self.peers = {}
 
 	def get_files(self):
 		files = {}
@@ -30,19 +29,7 @@ class FS_Node:
 		s.send_data(self.files)
 
 
-	"""
-	"""
-	def send_data(self, files):
-		try:
-			if not s:
-				raise ConnectionError("Socket is not connected to the server yet")
-			# Send the data
-			s.send(files)
-		except ConnectionError as ce:	
-			print(f"Connection error: {ce}")
-		except Exception as e:
-			print(f"An error occurred: {e}")
-			
+
 		
 
 	
