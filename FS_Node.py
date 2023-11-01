@@ -66,7 +66,7 @@ def Main(dir):
 
 	while True:	
 		user_input = input("FS_Node > ")
-		if (user_input.lower().strip!="exit" and user_input.lower().strip!="ls"):
+		if (command := user_input.lower().strip().split())[0] == "get":
 
 
 
