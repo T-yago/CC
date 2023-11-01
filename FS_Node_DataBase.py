@@ -33,7 +33,8 @@ class FS_Node_DataBase():
 
 
 					
-					else : self.files[file_name] = (file_size, -1)
+					else : 
+						self.files[file_name] = (file_size, -1)
 					
 		else:
 			print(f"Folder '{dir}' does not exist.")
@@ -41,10 +42,10 @@ class FS_Node_DataBase():
 
 
 	def get_files(self):
-		files = {}
-		for file in self.files:
-			files[file] = self.files[file]
-		return files
+		files = []
+		for file, (file_size, packets_owned) in self.files.items():
+			files.append((file, file_size, packets_owned))
+		return files	
 
 	def add_file(self, file, num_packets, packets_owned):
 		self.files[file] = (num_packets, packets_owned)
