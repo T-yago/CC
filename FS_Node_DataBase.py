@@ -1,5 +1,4 @@
 import socket
-import os
 
 class FS_Node_DataBase():
 
@@ -18,26 +17,6 @@ class FS_Node_DataBase():
 		self.addr = address
 		self.files = {}  
 
-	def load_existent_files (self, dir):
-		# Open the specified folder and add its files to the 'files' dictionary
-		folder_path = os.path.abspath(dir)
-
-		if os.path.exists(folder_path) and os.path.isdir(folder_path):
-			for file_name in os.listdir(folder_path):
-				file_path = os.path.join(folder_path, file_name)
-				if os.path.isfile(file_path):
-					file_size = os.path.getsize(file_path)
-					if os.path.isfile(path_to_metadata):
-						## ler a struct e preencher o dicionário com os pacotes que cada ficheiro tem
-						self.files[file_name] = (file_size, packets_owned)
-
-
-					else : 
-						self.files[file_name] = (file_size, -1)
-					
-		else:
-			print(f"Folder '{dir}' does not exist.")
-	
 
 	"""
 	Função que retorna a informação de todos os ficheiros que o FS_Node possuí
