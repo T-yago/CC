@@ -63,7 +63,7 @@ def Main(dir):
 	server_ip = '127.0.0.1'
 	server_port = 12345
 
-    s = connect_node(server_ip, server_port)
+	s = connect_node(server_ip, server_port)
 	initial_files = FS_Node_DB.get_files()
 	Message_Protocols.send_message(s, send_lock, initial_files)
 

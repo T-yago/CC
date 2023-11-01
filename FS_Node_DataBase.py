@@ -29,7 +29,8 @@ class FS_Node_DataBase():
 
 
 					
-					else self.files[file_name] = (file_size, -1)
+					else:
+						self.files[file_name] = (file_size, -1)
 					
 		else:
 			print(f"Folder '{folder_name}' does not exist.")
