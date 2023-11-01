@@ -2,6 +2,7 @@ import socket
 import threading
 import signal
 import sys
+import os
 import FS_Node_DataBase
 import Message_Protocols
 
@@ -39,6 +40,68 @@ def write_MTDados(dir, FS_Node_DB):
 			file.write(f"{n_packets}\n")
 			file.write(f"{packets}\n")
 
+
+""""
+
+A função get_file_metadata() recebe o nome de um ficheiro e o caminho para o ficheiro de metadados e devolve uma lista com os metadados desse ficheiro.
+Assume ainda que os ficheiros de metadados seguem a seguinte apresentação:
+MetaDados.txt:
+
+file1.txt		(nome do ficheiro)
+50				(número de pacotes do ficheiro quando completo)
+65763			(pacotes que possuí representado por um inteiro)
+file2.txt
+....
+"""
+
+def get_file_metadata(file_name, meta_file):
+	metadata = [] 
+	found_file = False  
+	current_index = 0
+
+	with open(meta_file, "r") as file:
+		lines = file.readlines()
+
+	while current_index < len(lines):
+		line = lines[current_index].strip()
+		if line == file_name:
+			found_file = True
+			name = line
+			n_packets = int(lines[current_index + 1])
+			packets = int(lines[current_index + 2])
+
+			break
+		current_index += 3  # Passa para a próxima linha onde pode estar o nome de um ficheiro
+
+	if not found_file:
+		return None  
+		
+	metadata = [name, n_packets, packets]
+	return metadata
+
+
+def fetch_files (self, dir, path_to_metadata):
+		# Open the specified folder and add its files to the 'files' dictionary
+		folder_path = os.path.abspath(dir)
+
+		files = []
+
+		if os.path.exists(folder_path) and os.path.isdir(folder_path):
+			for file_name in os.listdir(folder_path):
+				file_path = os.path.join(folder_path, file_name)
+				if os.path.isfile(file_path):
+					file_size = os.path.getsize(file_path)
+					if os.path.isfile(path_to_metadata):
+						## ler a struct e preencher o dicionário com os pacotes que cada ficheiro tem
+						metadata = get_file_metadata(file)
+						files[file_name] = (file_name, metadata[1], metadata[2])
+
+
+					else : 
+						files.append(file_name, file_size, -1) 
+					
+		else:
+			print(f"Folder '{dir}' does not exist.")
 
 
 def connect_node(server_ip, server_port):
