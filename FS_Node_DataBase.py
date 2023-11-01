@@ -63,7 +63,7 @@ class FS_Node_DataBase():
 	Função que devolve os nomes dos ficheiros, recebendo ainda um inteiro que determina se a função
 	deverá retornar os nomes de todos os ficheiros, ou apenas os dos completos ou os dos incompletos.
 	"""
-	def get_files(self, condition):
+	def get_files_names(self, condition):
 		names_files = []
 
 		if condition==0:
@@ -89,6 +89,6 @@ class FS_Node_DataBase():
 				return (info[1], info[1])
 			else:
 				completed_pcks = bin(info[1]).count('1')
-				return (completed_pcks, file[0])
+				return (completed_pcks, info[0])
 		else:
 			return -1

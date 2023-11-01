@@ -50,6 +50,56 @@ def connect_node(server_ip, server_port):
         print(f"Error connecting to server: {e}")
         return None
 
+def requests_handler_thread(s, FS_Node_DB, user_input):
+	if (command := user_input.lower().strip().split())[0] == "get":
+
+
+
+
+
+
+		# Escrever o resto do código.
+
+
+
+
+
+
+
+		user = []
+	elif (user_input.lower().strip()!="ls"):
+		name_files = FS_Node_DB.get_files_names(0)
+		for name in name_files:
+			print(name + " ", end="")
+	elif (user_input.lower().strip()!="ls -c"):
+		name_files = FS_Node_DB.get_files_names(1)
+		for name in name_files:
+			print(name + " ", end="")
+	elif (user_input.lower().strip()!="ls -i"):
+		name_files = FS_Node_DB.get_files_names(2)
+		for name in name_files:
+			print(name + " ", end="")
+	elif (command := user_input.lower().strip().split())[0] == "check":
+
+		# Função que imprime no terminal uma representação do estado da transferência de um ficheiro
+		if command[1]=="-all":
+			name_files = FS_Node_DB.get_files_names(0)
+			for name in name_files:
+				progress = FS_Node_DB.get_number_packets_completed(command[1])
+				filled_blocks = int((progress[0] / progress[1]) * 50)
+				empty_blocks = 50 - filled_blocks
+				progress_bar = "█" * filled_blocks + "░" * empty_blocks
+				print(f"[{progress_bar}] {progress} out of {progress[1]}")
+		else:
+			progress = FS_Node_DB.get_number_packets_completed(command[1])
+			if (progress==-1):
+				print("File does not exist.")
+			else:
+				filled_blocks = int((progress[0] / progress[1]) * 50)
+				empty_blocks = 50 - filled_blocks
+				progress_bar = "█" * filled_blocks + "░" * empty_blocks
+				print(f"[{progress_bar}] {progress} out of {progress[1]}")
+
 def Main(dir):
 
 	# Lock para impedir duas escritas consecutivas no mesmo socket buffer
@@ -74,46 +124,14 @@ def Main(dir):
 
 	while True:	
 		user_input = input("FS_Node > ")
-		if (command := user_input.lower().strip().split())[0] == "get":
 
-
-
-
-
-
-			# Escrever o resto do código.
-
-
-
-
-
-
-
-			user = []
-		elif (user_input.lower().strip()!="ls"):
-			FS_Node_DataBase.get_files(0)
-		elif (user_input.lower().strip()!="ls -c"):
-			FS_Node_DataBase.get_files(1)
-		elif (user_input.lower().strip()!="ls -i"):
-			FS_Node_DataBase.get_files(2)
-		elif (command := user_input.lower().strip().split())[0] == "check":
-
-			# Função que imprime no terminal uma representação do estado da transferência de um ficheiro
-			progress = FS_Node_DataBase.get_percentage_file(command[1])
-			if (progress==-1):
-				print("File does not exist.")
-			else:
-				filled_blocks = int(progress[0] / progress[1] * progress[1])
-				empty_blocks = progress[1] - filled_blocks
-				progress_bar = "█" * filled_blocks + "░" * empty_blocks
-				print(f"[{progress_bar}] {progress} out of {progress[1]}")
-			
-
-		elif (user_input.lower().strip=="exit"):
+		if (user_input.lower().strip!="exit"):
+			thread = threading.Thread(target=requests_handler_thread, args=(s, FS_Node_DB, user_input))
+			thread.Start()
+		else:
 			# Guarda os dados dos ficheiros do FS_Node num ficheiro de metadados
 			write_MTDados(dir, FS_Node_DB)
 
-			s.close()
 			break
 
 	s.close()
