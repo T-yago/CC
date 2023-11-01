@@ -42,7 +42,7 @@ class FS_Node_DataBase():
 
 	def get_files(self):
 		files = []
-		for file, (file_size, packets_owned) in self.files.items():
+		for file, (file_size, packets_owned) in self.files:
 			files.append((file, file_size, packets_owned))
 		return files	
 
