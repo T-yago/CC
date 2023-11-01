@@ -42,6 +42,15 @@ def write_MTDados(dir, FS_Node_DB):
 
 
 
+def connect_node(server_ip, server_port):
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.connect((server_ip, server_port))
+        return s
+    except socket.error as e:
+        print(f"Error connecting to server: {e}")
+        return None
+
 def Main(dir):
 
 	# Lock para impedir duas escritas consecutivas no mesmo socket buffer
@@ -54,8 +63,7 @@ def Main(dir):
 	server_ip = '127.0.0.1'
 	server_port = 12345
 
-	s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-	s.connect((server_ip, server_port))
+    s = connect_node(server_ip, server_port)
 	initial_files = FS_Node_DB.get_files()
 	Message_Protocols.send_message(s, send_lock, initial_files)
 

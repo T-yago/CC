@@ -14,7 +14,6 @@ class FS_Node_DataBase():
 	def __init__(self, address, folder_name):
 		self.addr = address
 		self.files = {}  
-		self.permissions = []  
 
 		# Open the specified folder and add its files to the 'files' dictionary
 		folder_path = os.path.abspath(folder_name)
