@@ -54,9 +54,9 @@ file2.txt
 ....
 """
 
-def get_file_metadata(file_name, meta_file):
+def get_file_metadata(meta_file):
 	metadata = [] 
-	found_file = False  
+	file_index = 0;
 	current_index = 0
 
 	with open(meta_file, "r") as file:
@@ -64,46 +64,44 @@ def get_file_metadata(file_name, meta_file):
 
 	while current_index < len(lines):
 		line = lines[current_index].strip()
-		if line == file_name:
-			found_file = True
-			name = line
-			n_packets = int(lines[current_index + 1])
-			packets = int(lines[current_index + 2])
-
-			break
+		name = line
+		n_packets = int(lines[current_index + 1])
+		packets = int(lines[current_index + 2])
+		metadata[file_index] = (name, n_packets, packets)
+		break
 		current_index += 3  # Passa para a próxima linha onde pode estar o nome de um ficheiro
-
-	if not found_file:
-		return None  
 		
-	metadata = [name, n_packets, packets]
 	return metadata
 
 
-def fetch_files (self, dir, path_to_metadata):
-		# Open the specified folder and add its files to the 'files' dictionary
-		folder_path = os.path.abspath(dir)
+def fetch_files(self, dir, path_to_metadata):
+	# Open the specified folder and add its files to the 'files' dictionary
+	folder_path = os.path.abspath(dir)
 
-		files = []
+	files = {}
 
-		if os.path.exists(folder_path) and os.path.isdir(folder_path):
+	## Vê se existe ficheiro de metadados
+	if os.path.exists(folder_path) and os.path.isdir(folder_path):
+
+			if os.path.isfile(path_to_metadata):
+
+				# se existe, popula o dicionário
+				metadata = get_file_metadata(path_to_metadata)
+				for name, n_packets, packets in metadata:
+					files[name] = (name, n_packets, packets)
+			
+			# vê se existem ficheiros que não estão no ficheiro de metadados
 			for file_name in os.listdir(folder_path):
 				file_path = os.path.join(folder_path, file_name)
-				if os.path.isfile(file_path):
+				if os.path.isfile(file_path) and file_name not in files:
+					# Se existirem, adiciona-os ao dicionário, assumindo que estão completos
 					file_size = os.path.getsize(file_path)
-					if os.path.isfile(path_to_metadata):
-						## ler a struct e preencher o dicionário com os pacotes que cada ficheiro tem
-						metadata = get_file_metadata(file)
-						files[file_name] = (file_name, metadata[1], metadata[2])
+					files[file_name] = (file_name, file_size, -1)
 
+	else:
+		print(f"Folder '{dir}' does not exist.")
 
-					else : 
-						files.append(file_name, file_size, -1) 
-					
-		else:
-			print(f"Folder '{dir}' does not exist.")
-		
-		return files
+	return files
 
 
 def connect_node(server_ip, server_port):
@@ -184,7 +182,7 @@ def Main(dir, path_to_metadata="FS_Node_Files/"):
 	FS_Node_DB.add_files(initial_files)
 
 	Message_Protocols.send_message(s, send_lock, initial_files)
-
+		
 	# Sinal ativado quando o clinte termina o programa premindo ctrl+c
 	signal.signal(signal.SIGINT, lambda signum, frame: signal_handler(signum, frame, dir, FS_Node_DB))
 
