@@ -1,4 +1,5 @@
 import socket
+import os
 
 class FS_Node_DataBase():
 
@@ -11,12 +12,15 @@ class FS_Node_DataBase():
 	
 	"""
 	
-	def __init__(self, address, folder_name):
+
+
+	def __init__(self, address):
 		self.addr = address
 		self.files = {}  
 
+	def load_existent_files (self, dir):
 		# Open the specified folder and add its files to the 'files' dictionary
-		folder_path = os.path.abspath(folder_name)
+		folder_path = os.path.abspath(dir)
 
 		if os.path.exists(folder_path) and os.path.isdir(folder_path):
 			for file_name in os.listdir(folder_path):
@@ -28,19 +32,19 @@ class FS_Node_DataBase():
 						self.files[file_name] = (file_size, packets_owned)
 
 
-					
-					else:
+					else : 
 						self.files[file_name] = (file_size, -1)
 					
 		else:
-			print(f"Folder '{folder_name}' does not exist.")
+			print(f"Folder '{dir}' does not exist.")
 	
+
 
 	def get_files(self):
 		files = []
-		for file in self.files:
-			files[file] = self.files[file]
-		return files
+		for file, (file_size, packets_owned) in self.files.items():
+			files.append((file, file_size, packets_owned))
+		return files	
 
 	def add_file(self, file, num_packets, packets_owned):
 		self.files[file] = (num_packets, packets_owned)

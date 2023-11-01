@@ -2,7 +2,6 @@ import socket
 import threading
 import signal
 import sys
-import os
 import FS_Node_DataBase
 import Message_Protocols
 
@@ -58,6 +57,8 @@ def Main(dir):
 
 	# Inícia a base de dados do servidor e o lock associado ao mesmo
 	FS_Node_DB = FS_Node_DataBase()
+
+	FS_Node_DB.load_existent_files("FS_Node_Files/")
 	
 	# Cria uma conexão TCP entre o FS_Node e o servidor (TCP) e informa o servidor dos ficheiros que possuí
 	server_ip = '127.0.0.1'
