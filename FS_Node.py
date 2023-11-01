@@ -34,7 +34,7 @@ def write_MTDados(dir, FS_Node_DB):
 		os.remove(file_meta)
 
 	with open(file_meta, "w") as file:
-		for name, n_packets, packets in FS_Node_DB:
+		for name, n_packets, packets in FS_Node_DB.get_files():
 			file.write(f"{name}\n")
 			file.write(f"{n_packets}\n")
 			file.write(f"{packets}\n")

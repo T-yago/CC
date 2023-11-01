@@ -39,7 +39,9 @@ class FS_Node_DataBase():
 			print(f"Folder '{dir}' does not exist.")
 	
 
-
+	"""
+	Função que retorna a informação de todos os ficheiros que o FS_Node possuí
+	"""
 	def get_files(self):
 		files = []
 		for file, (file_size, packets_owned) in self.files:
@@ -48,16 +50,6 @@ class FS_Node_DataBase():
 
 	def add_file(self, file, num_packets, packets_owned):
 		self.files[file] = (num_packets, packets_owned)
-	
-	"""
-	Função que retorna a informação de todos os ficheiros que o FS_Node possuí
-	"""
-	def get_all_info(self):
-		info = []
-
-		for file, info_file in self.files:
-			info.append((file, info_file[0], info_file[1]))
-		return info
 
 	"""
 	Função que devolve os nomes dos ficheiros, recebendo ainda um inteiro que determina se a função
