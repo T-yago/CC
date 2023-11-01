@@ -40,6 +40,8 @@ def write_MTDados(dir, FS_Node_DB):
 			file.write(f"{n_packets}\n")
 			file.write(f"{packets}\n")
 
+
+
 def Main(dir):
 
 	# Lock para impedir duas escritas consecutivas no mesmo socket buffer
@@ -59,9 +61,6 @@ def Main(dir):
 
 	# Sinal ativado quando o clinte termina o programa premindo ctrl+c
 	signal.signal(signal.SIGINT, lambda signum, frame: signal_handler(signum, frame, dir, FS_Node_DB))
-
-
-
 
 
 	while True:	

@@ -2,7 +2,15 @@ import socket
 
 class FS_Node_DataBase():
 
+	
 	"""
+	Cada node é inicializado com um endereço IPv4 e um nome de uma pasta que contêm os ficheiros que o node possuí
+	Adicionalmente, deve ser feita a averiguação se o ficheiro de metadados, onde se guardam os dados sobre os ficheiros que existem, existe.
+	Se existir, então é porque a aplicação já correu pelo menos uma vez e deve-se ler o ficheiro e preencher o dicionário com a informação sobre que pacotes cada ficheiro tem, nesse node.
+	Caso contrário, sabemos que é a primeira vez que o código corre, logo podemos assumir que todos os ficheiros que são dados ao node estão completos.
+	
+	"""
+	
 	def __init__(self, address, folder_name):
 		self.addr = address
 		self.files = {}  
@@ -26,7 +34,7 @@ class FS_Node_DataBase():
 					
 		else:
 			print(f"Folder '{folder_name}' does not exist.")
-	"""
+	
 
 	def __init__(self,address):
 		self.files = {}
