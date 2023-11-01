@@ -36,9 +36,6 @@ class FS_Node_DataBase():
 			print(f"Folder '{folder_name}' does not exist.")
 	
 
-	def __init__(self,address):
-		self.files = {}
-
 	def get_files(self):
 		files = []
 		for file in self.files:
