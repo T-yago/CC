@@ -57,13 +57,10 @@ class FS_Node:
 	"""
 	Cria uma conexão entre o node e o servidor (TCP) e informa o servidor dos ficheiros que tem
 	"""
-	def conn_server(self, server_ip, server_port):
+	def conn_server(self, send_lock server_ip, server_port):
 		s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-		s.connect((server_ip, server_port))
-		s.send_data(self.files)
-
-
-	def save_file (self, )
+		s.connect((server_ip, server_port,0))
+        Message_Protocols.send_message(s, send_lock, self.files, mode=True, id_mode=0)
 		
 
 
