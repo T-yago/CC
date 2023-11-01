@@ -30,6 +30,12 @@ class FS_Node_DataBase():
 	def add_file(self, file, num_packets, packets_owned):
 		self.files[file] = (num_packets, packets_owned)
 
+
+	def add_files(self, files):
+		for (file, num_packets, packets_owned) in files:
+			self.files[file] = (num_packets, packets_owned)
+
+
 	"""
 	Função que devolve os nomes dos ficheiros, recebendo ainda um inteiro que determina se a função
 	deverá retornar os nomes de todos os ficheiros, ou apenas os dos completos ou os dos incompletos.

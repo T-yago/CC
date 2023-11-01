@@ -102,6 +102,8 @@ def fetch_files (self, dir, path_to_metadata):
 					
 		else:
 			print(f"Folder '{dir}' does not exist.")
+		
+		return files
 
 
 def connect_node(server_ip, server_port):
@@ -163,7 +165,7 @@ def requests_handler_thread(s, FS_Node_DB, user_input):
 				progress_bar = "█" * filled_blocks + "░" * empty_blocks
 				print(f"[{progress_bar}] {progress} out of {progress[1]}")
 
-def Main(dir):
+def Main(dir, path_to_metadata="FS_Node_Files/"):
 
 	# Lock para impedir duas escritas consecutivas no mesmo socket buffer
 	send_lock = threading.Lock()
@@ -178,7 +180,9 @@ def Main(dir):
 	server_port = 12345
 
 	s = connect_node(server_ip, server_port)
-	initial_files = FS_Node_DB.get_files()
+	initial_files = fetch_files(dir,path_to_metadata)
+	FS_Node_DB.add_files(initial_files)
+
 	Message_Protocols.send_message(s, send_lock, initial_files)
 
 	# Sinal ativado quando o clinte termina o programa premindo ctrl+c
