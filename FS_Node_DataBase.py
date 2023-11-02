@@ -19,7 +19,8 @@ class FS_Node_DataBase():
 
 
 	"""
-	Função que retorna a informação de todos os ficheiros que o FS_Node possuí
+	Função que retorna a informação de todos os ficheiros que o FS_Node possuí, sendo esta um tuplo com o nome, tamanho do ficheiro e os pacotes que possuí.
+	EX: (file1, 50, 65763)
 	"""
 	def get_files(self):
 		files = []
@@ -27,10 +28,16 @@ class FS_Node_DataBase():
 			files.append((file, file_size, packets_owned))
 		return files	
 
+	"""
+	Função que adiciona um ficheiro à lista de ficheiros que a Database do FS_Node possui.
+	"""
 	def add_file(self, file, num_packets, packets_owned):
 		self.files[file] = (num_packets, packets_owned)
 
 
+	"""
+	Função que adiciona uma lista de ficheiros à lista de ficheiros que a Database do FS_Node possui.
+	"""
 	def add_files(self, files):
 		for (file, num_packets, packets_owned) in files:
 			self.files[file] = (num_packets, packets_owned)

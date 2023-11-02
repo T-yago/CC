@@ -28,6 +28,21 @@ def signal_handler(sig, frame, dir, FS_Node_DB):
 	
 	sys.exit(0)
 
+
+"""
+Função responsável por escrever os metadados dos ficheiros que o FS_Node possuí num ficheiro de metadados.
+O ficheiro segue a estrutura:
+MetaDados.txt:
+
+file1.txt		(nome do ficheiro)
+50				(número de pacotes do ficheiro quando completo)
+65763			(pacotes que possuí representado por um inteiro)
+file2.txt
+...
+...
+...
+...
+"""
 def write_MTDados(dir, FS_Node_DB):
 	file_meta = dir + "MetaDados.txt"
 
@@ -73,9 +88,15 @@ def get_file_metadata(meta_file):
 		
 	return metadata
 
+"""
+Função responsável por devolver um dicionário com os ficheiros que o FS_Node possuí.
+Primeiro, é verificado se existe um ficheiro de metadados.
+Caso exista, então é lido e o dicionário é populado com os dados do ficheiro.
+De seguida, verifica-se se existem ficheiros que não estão no ficheiro de metadados.
+Caso existam, são adicionados ao dicionário, sendo assumindo que estão completos. 
 
+"""
 def fetch_files(self, dir, path_to_metadata):
-	# Open the specified folder and add its files to the 'files' dictionary
 	folder_path = os.path.abspath(dir)
 
 	files = {}
@@ -104,6 +125,9 @@ def fetch_files(self, dir, path_to_metadata):
 	return files
 
 
+"""
+Função responsável por criar uma conexão TCP entre o FS_Node e o servidor (TCP), com verificação de exceção caso não seja possível estabeler a conexão.
+"""
 def connect_node(server_ip, server_port):
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
