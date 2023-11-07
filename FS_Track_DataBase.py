@@ -110,7 +110,7 @@ class FS_Tracker_DataBase():
 							xor = self.f_incomplete[file[0]][index][1] ^ file[2]
 							if (xor==0):
 								del self.f_incomplete[file[0]][index]
-							else if (xor==pow(2, 8 * file[1]) - 1):
+							elif (xor==pow(2, 8 * file[1]) - 1):
 								del self.f_incomplete[file[0]][index]
 								self.complete[file[0]].append(addr)
 							else:

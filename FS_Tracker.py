@@ -44,7 +44,7 @@ os primeiros 4 bytes de todas as mensagens correspondem sempre a 1 inteiro de 4 
 def request_Thread(c, addr, FS_Tracker_DB, message, send_lock, data_to_store, condition):
     if (message[0]==0):
         response = FS_Tracker_DB.get_file_owners(message[1])
-        send_message(c, send_lock, response, False)
+        Message_Protocols.send_message(c, send_lock, response, False)
     elif (message[0]==1):
         with condition:
             data_to_store.append(message)
@@ -69,7 +69,7 @@ def client_thread(c, addr, FS_Tracker_DB):
     # Recebe os ficheiros que o FS_Node possuí. Devolve -1 caso o cliente tenha fechado a conexão.
     message = recieve_message(c, 0)
 
-    if (message!=-1) {
+    if (message!=-1):
         data_to_store.append((-1,message))
         condition.notify()
 
@@ -82,7 +82,7 @@ def client_thread(c, addr, FS_Tracker_DB):
                 thread.Start()
             else:
                 break
-    }
+    
 
 	# Fechar a conexão
     c.close()
@@ -105,7 +105,7 @@ def Main():
     print("socket is listening")
 
 
-    
+
 
 
 
