@@ -190,8 +190,12 @@ def requests_handler_thread(s, FS_Node_DB, user_input):
 def Main(dir, path_to_metadata="FS_Node_Files/"):
 
 	# Lock para impedir duas escritas consecutivas no mesmo socket buffer
-    send_lock = threading.Lock()
-	FS_Node = FS_Node()
+	send_lock = threading.Lock()
+
+	# Inícia a base de dados do servidor e o lock associado ao mesmo
+	FS_Node_DB = FS_Node_DataBase()
+
+	FS_Node_DB.load_existent_files("FS_Node_Files/")
 	
 	# Cria uma conexão TCP entre o FS_Node e o servidor (TCP) e informa o servidor dos ficheiros que possuí
 	server_ip = '127.0.0.1'
@@ -207,13 +211,18 @@ def Main(dir, path_to_metadata="FS_Node_Files/"):
 	signal.signal(signal.SIGINT, lambda signum, frame: signal_handler(signum, frame, dir, FS_Node_DB))
 
 
-	while True:
+	while True:	
+		user_input = input("FS_Node > ")
 
-		
+		if (user_input.lower().strip!="exit"):
+			thread = threading.Thread(target=requests_handler_thread, args=(s, FS_Node_DB, user_input))
+			thread.Start()
+		else:
+			# Guarda os dados dos ficheiros do FS_Node num ficheiro de metadados
+			write_MTDados(dir, FS_Node_DB)
 
+			break
 
-		
-	# close the connection
 	s.close()
 
 
