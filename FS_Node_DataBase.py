@@ -76,3 +76,30 @@ class FS_Node_DataBase():
 				return (completed_pcks, info[0])
 		else:
 			return -1
+
+
+""""
+Recebe a lista com os donos do ficheiro que estamos a pedir no seguinte formato:
+[10, (192.124.123,-1), (192.124.124, 123), (192.124.125, 123)]
+Pega na primeira posição e cria um array com o mesmo número de poições que o ficheiro tem
+
+"""
+def get_rarest_packets (list, self) :
+	# Dicionário que contêm o número de vezes que um pacote é possuído por um FS_Node
+	packets = [0] * list[0]
+
+	# Percorrer os bits que corresponde a cada pacote do ficheiro
+	for i in range(len(list)):
+		# Percorrer todos os FS_Nodes que possuem o ficheiro, nesse bit e calcular a soma desse bit
+		bit_sum = sum((node[1] >> i) & 1 for node in list[1:])
+		packets[i] = bit_sum
+
+		# Cria um array auxiliar com os índices do array, para ordenar
+		packet_indices = list(range(len(packets)))
+
+		sorted_indices = sorted(packet_indices, key=lambda x: packets[x])
+
+	return sorted_indices
+
+
+
