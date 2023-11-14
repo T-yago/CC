@@ -57,11 +57,11 @@ class FS_Tracker_DataBase():
 			# Verifica se o Node possuí o ficheiro completo
 			if file[2] == -1:
 				with self.f_complete[file[0]][0].w_locked():
-					self.f_complete[file[0]].append(addr)
+					self.f_complete[file[0]].insert(self.f_complete[file[0]][1] + 3, addr)
 			# Adiciona um novo ficheiro incompleto caso contrário
 			else:
 				with self.f_incomplete[file[0]][0].w_locked():
-					self.f_incomplete[file[0]].append([addr, file[2]])
+					self.f_incomplete[file[0]].insert(self.f_incomplete[file[0]][1] + 3, [addr, file[2]])
 	
 	"""
 	Função responsável por atualizar os ficheiros e pacotes de ficheiros que um FS_Node possuí. Esta pode
@@ -103,9 +103,10 @@ class FS_Tracker_DataBase():
 						if index == -1:
 							# Verifica se o ficheiro está completo
 							if (file[2] == -1):
-								self.f_complete[file[0]].append(addr)
+								with self.f_complete[file[0]][0].w_locked():
+									self.f_complete[file[0]].insert(self.f_complete[file[0]][1] + 3, addr)
 							else:
-								self.f_incomplete[file[0]].append([addr, file[2]])
+								self.f_incomplete[file[0]].insert(self.f_incomplete[file[0]][1] + 3, [addr, file[2]])
 							self.lock.release()
 						else:
 							# Realizar a operação de ou exclusivo para fazer as adições e/ou deleções de pacotes de um ficheiro
@@ -114,7 +115,8 @@ class FS_Tracker_DataBase():
 								del self.f_incomplete[file[0]][index]
 							elif (xor==pow(2, 8 * file[1]) - 1):
 								del self.f_incomplete[file[0]][index]
-								self.f_complete[file[0]].append(addr)
+								with self.f_complete[file[0]][0].w_locked():
+									self.f_complete[file[0]].append(addr)
 							else:
 								self.f_incomplete[file[0]][index][1] = xor
 				else:
@@ -189,12 +191,12 @@ class FS_Tracker_DataBase():
 					for node in self.f_complete[file][3:][0:self.f_complete[1]]:
 						lista_final_completos.append((node, -1))
 					
-					if (self.f_complete[1]<len(self.f_complete[3:])):
-						self.f_complete[1] += 1
-					elif (self.f_incomplete[1]<len(self.f_incomplete[3:])):
+					if (self.f_complete[file][1]<len(self.f_complete[file][3:])):
+						self.f_complete[file][1] += 1
+					elif (self.f_incomplete[file][1]<len(self.f_incomplete[file][3:])):
 						flag_alteraIncompletos = 1
 					else:
-						self.f_complete[1] = 0
+						self.f_complete[file][1] = 0
 						flag_alteraIncompletos = 2
 				
 				# Percorre os FS_Nodes com o ficheiro incompleto
@@ -205,9 +207,9 @@ class FS_Tracker_DataBase():
 					lista_final_incompletos.append(tuple(node))
 				
 				if (flag_alteraIncompletos==1):
-					self.f_complete[1] += 1
+					self.f_complete[file][1] += 1
 				elif (flag_alteraIncompletos==2):
-					self.f_incomplete[1] = 0
+					self.f_incomplete[file][1] = 0
 			
 			lista = lista_inicial_completos + lista_inicial_incompletos + lista_final_incompletos + lista_final_completos
 		
