@@ -78,8 +78,7 @@ def get_file_metadata(meta_file):
 		lines = file.readlines()
 
 	while current_index < len(lines):
-		line = lines[current_index].strip()
-		name = line
+		name = lines[current_index].strip()
 		n_packets = int(lines[current_index + 1])
 		packets = int(lines[current_index + 2])
 		metadata[file_index] = [name, n_packets, packets]
