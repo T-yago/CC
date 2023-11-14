@@ -5,12 +5,12 @@ from ReentrantRWLock import ReentrantRWLock
 class FS_Tracker_DataBase():
 
 	"""
-	Estrutura f_complete = {F1: [LOCK, 20, 172.0.1, 193.0.1.2]}
+	Estrutura f_complete = {F1: [LOCK, 0, 20, 172.0.1, 193.0.1.2]}
 	A key corresponde ao nome do ficheiro e o value corresponde a uma lista dos endereços IPv4 dos FS_Nodes que
 	possuem esse ficheiro completo, sendo o primeiro elemento da lista um lock para controlar as leituras e escritas,
 	e o segundo elemento o número de pacotes que compõem o ficheiro.
 
-	Estrutura f_incomplete = {F1: [LOCK, 20, [172.0.1, 61253], [193.0.1.2, 5723]]}
+	Estrutura f_incomplete = {F1: [LOCK, 1, 20, [172.0.1, 61253], [193.0.1.2, 5723]]}
 	A key corresponde ao nome do ficheiro e o value correspode a uma lista em que o primeiro elemento é um lock para controlar as leituras e escritas
 	e o segundo é sempre o número de pacotes em que o ficheiro está dividido e os restantes elementos correspondem aos pacotes que cada
 	FS_Node possui e o endereço IPv4 de cada FS_Node.
@@ -50,8 +50,8 @@ class FS_Tracker_DataBase():
 			# Adiciona o ficheiro caso este seja novo na base de dados e insere logo o tamanho do ficheiro na primeira posição das listas
 			self.lock.acquire()
 			if file[0] not in self.f_complete:
-				self.f_complete[file[0]] = [ReentrantRWLock(), file[1]]
-				self.f_incomplete[file[0]] = [ReentrantRWLock(), file[1]]
+				self.f_complete[file[0]] = [ReentrantRWLock(), 0, file[1]]
+				self.f_incomplete[file[0]] = [ReentrantRWLock(), 0, file[1]]
 			self.lock.release()
 			
 			# Verifica se o Node possuí o ficheiro completo
@@ -99,11 +99,11 @@ class FS_Tracker_DataBase():
 				if addr not in self.f_complete[file[0]]:
 					
 					with self.f_incomplete[file[0]][0].w_locked():
-						index = addr_has_packets(file[0], addr)
+						index = self.addr_has_packets(file[0], addr)
 						if index == -1:
 							# Verifica se o ficheiro está completo
 							if (file[2] == -1):
-								self.complete[file[0]].append(addr)
+								self.f_complete[file[0]].append(addr)
 							else:
 								self.f_incomplete[file[0]].append([addr, file[2]])
 							self.lock.release()
@@ -114,7 +114,7 @@ class FS_Tracker_DataBase():
 								del self.f_incomplete[file[0]][index]
 							elif (xor==pow(2, 8 * file[1]) - 1):
 								del self.f_incomplete[file[0]][index]
-								self.complete[file[0]].append(addr)
+								self.f_complete[file[0]].append(addr)
 							else:
 								self.f_incomplete[file[0]][index][1] = xor
 				else:
@@ -134,8 +134,8 @@ class FS_Tracker_DataBase():
 
 			# Adicionar a informação caso o FS_Node não tivesse nada relativo aquele ficheiro
 			else:
-				self.f_complete[file[0]] = [ReentrantRWLock(), file[1]]
-				self.f_incomplete[file[0]] = [ReentrantRWLock(), file[1]]
+				self.f_complete[file[0]] = [ReentrantRWLock(), 0, file[1]]
+				self.f_incomplete[file[0]] = [ReentrantRWLock(), 0, file[1]]
 				self.lock.release()
 
 				# Verifica se o Node possuí o ficheiro completo
@@ -151,9 +151,9 @@ class FS_Tracker_DataBase():
 	Verifica se o FS_Node já tem pacotes de um determinado ficheiro
 	"""
 	def addr_has_packets(self, file, addr):
-		for i in range(len(self.f_incomplete[file])-2):
-			if (self.f_incomplete[file][i+2][0] == addr):
-				return i+2
+		for i in range(len(self.f_incomplete[file])-3):
+			if (self.f_incomplete[file][i+3][0] == addr):
+				return i+3
 		return -1
 
 	"""
@@ -166,23 +166,50 @@ class FS_Tracker_DataBase():
 	enquanto estamos a ler, prevenindo que apareça resultados errados.
 	"""
 	def get_file_owners(self, file):
-		lista = []
+
+		flag_alteraIncompletos = 0
+		lista_inicial_completos = []
+		lista_final_completos = []
+		lista_inicial_incompletos = []
+		lista_final_incompletos = []
 
 		# Verificar se o ficheiro já existiu na rede
 		if file not in self.f_complete:
-			return lista
+			return lista_inicial_completos
 		else:
 
-			lista.append(self.f_complete[file][1])
+			lista_inicial_completos.append(self.f_complete[file][1])
 			# Percorre os FS_Nodes com o ficheiro completo
-			with self.f_complete[file][0].r_locked():
-				for node in self.f_complete[file][2:]:
-					lista.append((node, -1))
-
-			# Percorre os FS_Nodes com o ficheiro incompleto
 			with self.f_incomplete[file][0].r_locked():
-				for node in self.f_incomplete[file][2:]:
-					lista.append(tuple(node))
+				with self.f_complete[file][0].r_locked():
+
+					for node in self.f_complete[file][3:][self.f_complete[1]:]:
+						lista_inicial_completos.append((node, -1))
+					
+					for node in self.f_complete[file][3:][0:self.f_complete[1]]:
+						lista_final_completos.append((node, -1))
+					
+					if (self.f_complete[1]<len(self.f_complete[3:])):
+						self.f_complete[1] += 1
+					elif (self.f_incomplete[1]<len(self.f_incomplete[3:])):
+						flag_alteraIncompletos = 1
+					else:
+						self.f_complete[1] = 0
+						flag_alteraIncompletos = 2
+				
+				# Percorre os FS_Nodes com o ficheiro incompleto
+				for node in self.f_incomplete[file][2:][self.f_incomplete[file][1]:]:
+					lista_inicial_incompletos.append(tuple(node))
+				
+				for node in self.f_incomplete[file][2:][0:self.f_incomplete[file][1]]:
+					lista_final_incompletos.append(tuple(node))
+				
+				if (flag_alteraIncompletos==1):
+					self.f_complete[1] += 1
+				elif (flag_alteraIncompletos==2):
+					self.f_incomplete[1] = 0
+			
+			lista = lista_inicial_completos + lista_inicial_incompletos + lista_final_incompletos + lista_final_completos
 		
 		return lista
 
@@ -200,7 +227,7 @@ class FS_Tracker_DataBase():
 		
 		for file in self.f_incomplete:
 			with self.f_incomplete[file][0].w_locked():
-				index = addr_has_packets(file, addr)
+				index = self.addr_has_packets(file, addr)
 				if index != -1:
 					del self.f_incomplete[file][index]
 
