@@ -71,7 +71,7 @@ file2.txt
 
 def get_file_metadata(meta_file):
 	metadata = [] 
-	file_index = 0;
+	file_index = 0
 	current_index = 0
 
 	with open(meta_file, "r") as file:
@@ -82,8 +82,7 @@ def get_file_metadata(meta_file):
 		name = line
 		n_packets = int(lines[current_index + 1])
 		packets = int(lines[current_index + 2])
-		metadata[file_index] = (name, n_packets, packets)
-		break
+		metadata[file_index] = [name, n_packets, packets]
 		current_index += 3  # Passa para a próxima linha onde pode estar o nome de um ficheiro
 		
 	return metadata
