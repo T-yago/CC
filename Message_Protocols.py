@@ -12,7 +12,7 @@ O loop assegura que lemos a mensagem toda do socket buffer, caso esta ainda não
 
 Caso a máquina que está a enviar os dados feche a conexão em qualquer momento, a função devolve -1, caso contrário, se o argumento 'mode' estiver a
 0 devolve os dados sem especificar o tipo de pedido, já se estiver a 1, devolve um tuplo de dois elementos, sendo o primeiro elemento o inteiro identificador
-do pedido e o segundo campo os dados.
+do pedido e o segundo os dados.
 
 Importante salientar que caso a mensagem contenha o campo 'mode' este não é contabilizado para o tamanho da mensagem.
 """
@@ -29,13 +29,13 @@ def recieve_message(c, mode):
         request = int.from_bytes(request_bytes, byteorder='big')
     
     message = b''
-        while len(message) < message_length:
-            data = c.recv(message_length - len(message))
-            if not data:
-                return -1
-            message += data
+    while len(message) < message_length:
+        data = c.recv(message_length - len(message))
+        if not data:
+            return -1
+        message += data
 
-        message = eval(message.decode('utf-8'))
+    message = eval(message.decode('utf-8'))
     
     if (mode==1):
         message = (request, message)

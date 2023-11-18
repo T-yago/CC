@@ -22,13 +22,13 @@ Por sua vez, pedidos que envolvam atualizações dos dados do cliente são ident
 def thread_for_store(FS_Tracker_DB, c, condition, data_to_store, addr, send_lock):
     while True:
         with condition:
-            if len(data_to_store) == 0:
+            while (len(data_to_store) == 0):
                 condition.wait()
             message = data_to_store.pop(0)
         if (message[0]==-1):
             FS_Tracker_DB.handle_data(addr, message)
         elif (message[0]==1):
-            response = FS_Tracker_DB.update_information(addr, message[1])
+            FS_Tracker_DB.update_information(addr, message[1])
             Message_Protocols.send_message(c, send_lock, "UPDATED.", False)
 
 """
@@ -71,8 +71,9 @@ def client_thread(c, addr, FS_Tracker_DB):
     message = Message_Protocols.recieve_message(c, 0)
 
     if (message!=-1):
-        data_to_store.append((-1,message))
-        condition.notify()
+        with condition:
+            data_to_store.append((-1,message))
+            condition.notify()
 
         while True:
 
@@ -95,7 +96,7 @@ def Main():
     # reserve a port on your computer
     # in our case it is 12345 but it
     # can be anything
-    port = 12345
+    port = 9090
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.bind((host, port))
     print("socket binded to port", port)

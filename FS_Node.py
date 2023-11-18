@@ -123,6 +123,60 @@ def fetch_files(self, dir, path_to_metadata):
 	return files
 
 
+def get_file_Thread(s, send_lock, FS_Node_DB, fileName, priority_queue, index, lock_priority_queue):
+
+	
+	# Ontem um dos pacotes do ficheiro
+	lock_priority_queue.acquire()
+	while (index<len(priority_queue)):
+		packet_to_check = priority_queue[index]
+		index += 1
+		lock_priority_queue.release()
+
+		# Verifica se o FS_Node já possuí esse pacote
+		if (not FS_Node_DB.check_packet_file(fileName, packet_to_check)):
+
+			# Estabelece uma conxesão udp com o primeiro FS_Node que verifica que tem o pacote em falta e pede-lhe o pacote
+			server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+			server_address = ('localhost', 9090)
+			server_socket.bind(server_address)
+
+
+
+
+			# Continuar esta parte amanhã
+
+
+
+
+
+
+		lock_priority_queue.acquire()
+
+
+"""
+
+"""
+def downloadFile(s, send_lock, threads_per_request, FS_Node_DB, fileName):
+
+	# Pergunta ao FS_Tracker que FS_Nodes possuem informação sobre o ficheiro
+	send_lock.acquire()
+	Message_Protocols.send_message(s, send_lock, fileName, True, 0)
+	FS_Nodes = Message_Protocols.recieve_message(s, 0)
+	send_lock.release()
+
+	# Organiza a informação recebida pelos pacotes mais raros, sendo estes pedidos primeiro
+	priority_queue = FS_Node_DB.get_rarest_packets(FS_Nodes)
+
+	# Cria um lock para assegurar que cada thread só acede a uma posição
+	index = 0
+	lock_priority_queue = threading.RLock()
+
+	# Vai buscar os pacotes e guarda-os na base de dados do próprio FS_Node
+	for i in range(threads_per_request):
+		thread = threading.Thread(target=get_file_Thread, args=(s, send_lock, FS_Node_DB, fileName, priority_queue, index, lock_priority_queue))
+		thread.Start()
+
 """
 Função responsável por criar uma conexão TCP entre o FS_Node e o servidor (TCP), com verificação de exceção caso não seja possível estabeler a conexão.
 """
@@ -135,10 +189,11 @@ def connect_node(server_ip, server_port):
         print(f"Error connecting to server: {e}")
         return None
 
-def requests_handler_thread(s, FS_Node_DB, user_input):
+def requests_handler_thread(s, send_lock, threads_per_request, FS_Node_DB, user_input):
 	if (command := user_input.lower().strip().split())[0] == "get":
 
-
+		fileName = command[1]
+		downloadFile(s, send_lock, threads_per_request, FS_Node_DB, fileName)
 
 
 
@@ -185,10 +240,10 @@ def requests_handler_thread(s, FS_Node_DB, user_input):
 				progress_bar = "█" * filled_blocks + "░" * empty_blocks
 				print(f"[{progress_bar}] {progress} out of {progress[1]}")
 
-def Main(dir, path_to_metadata="FS_Node_Files/"):
+def Main(threads_per_request, dir, path_to_metadata="FS_Node_Files/"):
 
 	# Lock para impedir duas escritas consecutivas no mesmo socket buffer
-	send_lock = threading.Lock()
+	send_lock = threading.RLock()
 
 	# Inícia a base de dados do servidor e o lock associado ao mesmo
 	FS_Node_DB = FS_Node_DataBase()
@@ -212,8 +267,8 @@ def Main(dir, path_to_metadata="FS_Node_Files/"):
 	while True:	
 		user_input = input("FS_Node > ")
 
-		if (user_input.lower().strip!="exit"):
-			thread = threading.Thread(target=requests_handler_thread, args=(s, FS_Node_DB, user_input))
+		if (user_input.lower().strip()!="exit"):
+			thread = threading.Thread(target=requests_handler_thread, args=(s, send_lock, threads_per_request, FS_Node_DB, user_input))
 			thread.Start()
 		else:
 			# Guarda os dados dos ficheiros do FS_Node num ficheiro de metadados

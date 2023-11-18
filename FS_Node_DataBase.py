@@ -1,5 +1,7 @@
 import socket
 
+from ReentrantRWLock import ReentrantRWLock
+
 class FS_Node_DataBase():
 
 	
@@ -8,13 +10,10 @@ class FS_Node_DataBase():
 	Adicionalmente, deve ser feita a averiguação se o ficheiro de metadados, onde se guardam os dados sobre os ficheiros que existem, existe.
 	Se existir, então é porque a aplicação já correu pelo menos uma vez e deve-se ler o ficheiro e preencher o dicionário com a informação sobre que pacotes cada ficheiro tem, nesse node.
 	Caso contrário, sabemos que é a primeira vez que o código corre, logo podemos assumir que todos os ficheiros que são dados ao node estão completos.
-	
 	"""
 	
 
-
 	def __init__(self, address):
-		self.addr = address
 		self.files = {}  
 
 
@@ -28,11 +27,12 @@ class FS_Node_DataBase():
 			files.append((file, file_size, packets_owned))
 		return files	
 
+
 	"""
 	Função que adiciona um ficheiro à lista de ficheiros que a Database do FS_Node possui.
 	"""
 	def add_file(self, file, num_packets, packets_owned):
-		self.files[file] = (num_packets, packets_owned)
+		self.files[file] = [ReentrantRWLock(), num_packets, packets_owned]
 
 
 	"""
@@ -40,7 +40,17 @@ class FS_Node_DataBase():
 	"""
 	def add_files(self, files):
 		for (file, num_packets, packets_owned) in files:
-			self.files[file] = (num_packets, packets_owned)
+			self.files[file] = [ReentrantRWLock(), num_packets, packets_owned]
+	
+
+	"""
+	Função que verifica se o FS_Node já possuí um pacote específico de determinado ficheiro. Devolve
+	True caso o FS_Node já possua o pacote e False caso não possua
+	"""
+	def check_packet_file(self, file, packet):
+		with self.files[file][0].r_locked():
+			binary_to_compare = 1 << self.files[file][1] - packet - 1
+			return (self.files[file][2] & binary_to_compare > 0)
 
 
 	"""
@@ -63,7 +73,8 @@ class FS_Node_DataBase():
 					names_files.append(file)
 
 		return names_files
-	
+
+
 	"""
 	Função que retorna que percentagem do ficheiro já foi transferida para o FS_Node
 	"""
@@ -78,28 +89,28 @@ class FS_Node_DataBase():
 			return -1
 
 
-""""
-Recebe a lista com os donos do ficheiro que estamos a pedir no seguinte formato:
-[10, (192.124.123,-1), (192.124.124, 123), (192.124.125, 123)]
-Pega na primeira posição e cria um array com o mesmo número de poições que o ficheiro tem
+	""""
+	Recebe a lista com os donos do ficheiro que estamos a pedir no seguinte formato:
+	[10, (192.124.123,-1), (192.124.124, 123), (192.124.125, 123)]
+	Pega na primeira posição e cria um array com o mesmo número de poições que o ficheiro tem
 
-"""
-def get_rarest_packets (list, self) :
-	# Dicionário que contêm o número de vezes que um pacote é possuído por um FS_Node
-	packets = [0] * list[0]
+	"""
+	def get_rarest_packets (self, list) :
+		# Dicionário que contêm o número de vezes que um pacote é possuído por um FS_Node
+		packets = [0] * list[0]
 
-	# Percorrer os bits que corresponde a cada pacote do ficheiro
-	for i in range(len(list)):
-		# Percorrer todos os FS_Nodes que possuem o ficheiro, nesse bit e calcular a soma desse bit
-		bit_sum = sum((node[1] >> i) & 1 for node in list[1:])
-		packets[i] = bit_sum
+		# Percorrer os bits que corresponde a cada pacote do ficheiro
+		for i in range(len(packets)):
+			# Percorrer todos os FS_Nodes que possuem o ficheiro, nesse bit e calcular a soma desse bit
+			bit_sum = sum((node[1] >> i) & 1 for node in list[1:])
+			packets[i] = bit_sum
+
+		# Inverte a ordem do array, porque está ao contrário
+		packets = packets[::-1]
 
 		# Cria um array auxiliar com os índices do array, para ordenar
 		packet_indices = list(range(len(packets)))
 
 		sorted_indices = sorted(packet_indices, key=lambda x: packets[x])
 
-	return sorted_indices
-
-
-
+		return sorted_indices
