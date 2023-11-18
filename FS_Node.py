@@ -191,22 +191,8 @@ def connect_node(server_ip, server_port):
 
 def requests_handler_thread(s, send_lock, threads_per_request, FS_Node_DB, user_input):
 	if (command := user_input.lower().strip().split())[0] == "get":
-
 		fileName = command[1]
 		downloadFile(s, send_lock, threads_per_request, FS_Node_DB, fileName)
-
-
-
-
-		# Escrever o resto do código.
-
-
-
-
-
-
-
-		user = []
 	elif (user_input.lower().strip()!="ls"):
 		name_files = FS_Node_DB.get_files_names(0)
 		for name in name_files:
