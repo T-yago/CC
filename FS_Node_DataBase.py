@@ -1,61 +1,83 @@
-import socket
+"""
+Ficheiro correspondente à classe que funcionará como base de dados do FS_Node guardando toda a informação sobre
+os ficheiros que o mesmo possuí. A esta classe temos associadas funções de adição e remoção de ficheiros e pacotes,
+de forma, a fazer uma gestão da base de dados.
+"""
 
+import threading
 from ReentrantRWLock import ReentrantRWLock
+
+
 
 class FS_Node_DataBase():
 
-	
 	"""
-	Cada node é inicializado com um endereço IPv4 e um nome de uma pasta que contêm os ficheiros que o node possuí
-	Adicionalmente, deve ser feita a averiguação se o ficheiro de metadados, onde se guardam os dados sobre os ficheiros que existem, existe.
-	Se existir, então é porque a aplicação já correu pelo menos uma vez e deve-se ler o ficheiro e preencher o dicionário com a informação sobre que pacotes cada ficheiro tem, nesse node.
-	Caso contrário, sabemos que é a primeira vez que o código corre, logo podemos assumir que todos os ficheiros que são dados ao node estão completos.
+	Estrutura que guarda a informação relativa aos ficheiros ou partes de ficheiros que o FS_Node possuí. Contem um
+	dicionário em que cada key corresponde o nome do ficheiro e cada value associada à key é uma lista de 3 elementos.
+	O primeiro elemento é um RWLock, para prevenir que duas threads alterem os dados relativos a um ficheiro em simultâneo,
+	gerando resultados, errados. O segundo elemento é o número de pacotes em que o ficheiro está dividido e o terceiro é um
+	inteiro representante dos pacotes que o FS_Node possuí.
+
+	Exemplo da estrutura: {file1: [LOCK, 20, 74215]}
+
+	Importante salientar que há ainda um lock associado de forma a prevenir que duas threads alterem a estrutura em simultâneo
 	"""
-	
-
-	def __init__(self, address):
-		self.files = {}  
+	def __init__(self):
+		self.files = {}
+		self.lock = threading.Lock()
 
 
 	"""
-	Função que retorna a informação de todos os ficheiros que o FS_Node possuí, sendo esta um tuplo com o nome, tamanho do ficheiro e os pacotes que possuí.
-	EX: (file1, 50, 65763)
+	Função que retorna a informação de todos os ficheiros que o FS_Node possuí, sob a forma de uma lista de tuplos com 3
+	elementos cada. O primeiro elemnto é o nome do ficheiro, o segundo o número de pacotes em que o ficheiro está dividido
+	e o terceiro o inteiro correspondente aos pacotes que o FS_Node possuí do ficheiro correspondente.
+
+	Exemplo: (file1, 50, 65763)
 	"""
 	def get_files(self):
 		files = []
-		for file, (file_size, packets_owned) in self.files:
-			files.append((file, file_size, packets_owned))
-		return files	
+		for file, (lock, file_size, packets_owned) in self.files:
+			with lock.r_locked:
+				files.append((file, file_size, packets_owned))
+		
+		return files
 
 
 	"""
-	Função que adiciona um ficheiro à lista de ficheiros que a Database do FS_Node possui.
-	"""
-	def add_file(self, file, num_packets, packets_owned):
-		self.files[file] = [ReentrantRWLock(), num_packets, packets_owned]
-
-
-	"""
-	Função que adiciona uma lista de ficheiros à lista de ficheiros que a Database do FS_Node possui.
+	Função que adiciona uma lista de ficheiros ao dicionário relativo aos ficheiros que o FS_Node possuí.
 	"""
 	def add_files(self, files):
 		for (file, num_packets, packets_owned) in files:
+			self.lock.acquire()
 			self.files[file] = [ReentrantRWLock(), num_packets, packets_owned]
+			self.lock.release()
 	
 
 	"""
-	Função que verifica se o FS_Node já possuí um pacote específico de determinado ficheiro. Devolve
-	True caso o FS_Node já possua o pacote e False caso não possua
+	Função responsável por atualizar um pacote específico de um ficheiro, podendo ser uma adição ou deleção
+	de um pacote.
+	"""
+	def update_packet(self, file, packet_index):
+		with self.files[file][0].w_locked:
+			packets_owned = self.files[file][2]
+			packet_update_index = 1 << self.files[file][1] - packet_index - 1
+			new_value = packets_owned ^ packet_update_index
+			self.files[file][2] = new_value
+
+
+	"""
+	Função que verifica se o FS_Node já possuí um pacote específico de determinado ficheiro. Devolve True caso o FS_Node
+	já possua o pacote e False caso não possua
 	"""
 	def check_packet_file(self, file, packet):
-		with self.files[file][0].r_locked():
+		with self.files[file][0].r_locked:
 			binary_to_compare = 1 << self.files[file][1] - packet - 1
 			return (self.files[file][2] & binary_to_compare > 0)
 
 
 	"""
-	Função que devolve os nomes dos ficheiros, recebendo ainda um inteiro que determina se a função
-	deverá retornar os nomes de todos os ficheiros, ou apenas os dos completos ou os dos incompletos.
+	Função que devolve os nomes dos ficheiros, recebendo ainda um inteiro que determina se a função deverá retornar os nomes
+	de todos os ficheiros, ou apenas os dos completos ou os dos incompletos.
 	"""
 	def get_files_names(self, condition):
 		names_files = []
@@ -76,7 +98,9 @@ class FS_Node_DataBase():
 
 
 	"""
-	Função que retorna que percentagem do ficheiro já foi transferida para o FS_Node
+	Função que retorna um tuplo que representa quantos pacotes o FS_Node já possuí de determinado ficheiro. Desta forma,
+	o primeiro elemento corresponde ao número de pacotes que o FS_Node possuí do ficheiro e o segundo elemento corresponde
+	ao número de pacotes em que o ficheiro está dividido.
 	"""
 	def get_number_packets_completed(self, file):
 		if (info := self.files.get(file)):
@@ -84,19 +108,28 @@ class FS_Node_DataBase():
 				return (info[1], info[1])
 			else:
 				completed_pcks = bin(info[1]).count('1')
-				return (completed_pcks, info[0])
+				return (completed_pcks, info[1])
 		else:
 			return -1
 
 
 	""""
-	Recebe a lista com os donos do ficheiro que estamos a pedir no seguinte formato:
-	[10, (192.124.123,-1), (192.124.124, 123), (192.124.125, 123)]
-	Pega na primeira posição e cria um array com o mesmo número de poições que o ficheiro tem
+	Função associada a quando um cliente pede um ficheiro. Esta recebe uma lista em que o primeiro elemento é o número
+	de pacotes em que o ficheiro está dividido e os restantes elementos correspondem a FS_Nodes que possuem o ficheiro ou
+	pacotes do ficheiro requisitado pelo FS_Node. A lista recebida segue o seguinte formato:
 
+	Exemplo: [10, (192.124.123,-1), (192.124.124, 123), (192.124.125, 123)]
+
+	Desta forma, a função inicializa uma lista com um número de elementos igual ao número de pacotes do ficheiro e cada
+	posição corresponderá ao número de pacotes que existem de cada pacote na rede, ou seja, se na posição 0 da lista estiver
+	o número 2, então existem 2 FS_Nodes que possuem o primeiro pacote do ficheiro.
+
+	Por fim, cria uma nova lista, em que em cada posição se encontra o número do pacote, e ordena-a de acordo com a lista anterior,
+	ficando assim este ordenado por ordem crescente dos pacotes mais comuns.
 	"""
 	def get_rarest_packets (self, list) :
-		# Dicionário que contêm o número de vezes que um pacote é possuído por um FS_Node
+
+		# Dicionário que contêm o número de FS_Nodes que possuem o pacote com aquele índice
 		packets = [0] * list[0]
 
 		# Percorrer os bits que corresponde a cada pacote do ficheiro

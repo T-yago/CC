@@ -1,3 +1,7 @@
+"""
+Ficheiro que executa o FS_Node.
+"""
+
 import socket
 import threading
 import signal
@@ -5,6 +9,12 @@ import sys
 import os
 import FS_Node_DataBase
 import Message_Protocols
+
+
+
+# Tamanho de cada pacote de um ficheiro
+PACKET_SIZE = 144
+
 
 """
 Funções responsáveis por atualizar os metadados dos ficheiros que o FS_Node possuí quando o cliente termina o programa
@@ -39,9 +49,6 @@ file1.txt		(nome do ficheiro)
 65763			(pacotes que possuí representado por um inteiro)
 file2.txt
 ...
-...
-...
-...
 """
 def write_MTDados(dir, FS_Node_DB):
 	file_meta = dir + "MetaDados.txt"
@@ -66,7 +73,7 @@ file1.txt		(nome do ficheiro)
 50				(número de pacotes do ficheiro quando completo)
 65763			(pacotes que possuí representado por um inteiro)
 file2.txt
-....
+...
 """
 
 def get_file_metadata(meta_file):
@@ -82,7 +89,9 @@ def get_file_metadata(meta_file):
 		n_packets = int(lines[current_index + 1])
 		packets = int(lines[current_index + 2])
 		metadata[file_index] = [name, n_packets, packets]
-		current_index += 3  # Passa para a próxima linha onde pode estar o nome de um ficheiro
+
+		# Passa para a próxima linha onde pode estar o nome de um ficheiro
+		current_index += 3
 		
 	return metadata
 
@@ -92,9 +101,8 @@ Primeiro, é verificado se existe um ficheiro de metadados.
 Caso exista, então é lido e o dicionário é populado com os dados do ficheiro.
 De seguida, verifica-se se existem ficheiros que não estão no ficheiro de metadados.
 Caso existam, são adicionados ao dicionário, sendo assumindo que estão completos. 
-
 """
-def fetch_files(self, dir, path_to_metadata):
+def fetch_files(dir, path_to_metadata):
 	folder_path = os.path.abspath(dir)
 
 	files = {}
@@ -123,10 +131,96 @@ def fetch_files(self, dir, path_to_metadata):
 	return files
 
 
-def get_file_Thread(s, send_lock, FS_Node_DB, fileName, priority_queue, index, lock_priority_queue):
+"""
+Função que retorna uma lista ordenada por ordem descrescente de prioridade a quem o FS_Node deve pedir o
+pacote que pretende. Esta percorre a lista que possuí a informação sobre os FS_Nodes que não possuem e que
+possuem o pacote que FS_Node a partir da posição central e expandindo em redor da mesma. Este algoritmo, serve
+para tentar escolher o FS_Node que se encontra a responder a uma menor quantidade de pedidos referentes ao
+ficheiro que nós pretendemos. Assim, tentamos não sobrecarregar nenhum FS_Node.
+"""
+def FS_Nodes_ask_order(list_FS_Nodes_With_Packet):
+	FS_Nodes_ask_order = []
 
+	# Determina o ponto central da lista
+	size_list = len(list_FS_Nodes_With_Packet)
+	index_start_point = size_list // 2
+
+	# Adiciona o ponto central, caso este contenha um endereço IP
+	if ((ip := list_FS_Nodes_With_Packet[index_start_point])!=0):
+		FS_Nodes_ask_order.append(ip)
+
+	# Verifica se o número de elementos é par ou ímpar
+	if (len(list_FS_Nodes_With_Packet) % 2 == 0):
+
+		# Percorre a lista a partir do ponto central, adicionando à lista os endereços IP
+		for i in range(1, index_start_point, 1):
+
+			# Verifica se contêm um endereço ip nos índices i posições deslocados da posição inicial
+			if ((ip := list_FS_Nodes_With_Packet[index_start_point-i])!=0):
+				FS_Nodes_ask_order.append(ip)
+			if ((ip := list_FS_Nodes_With_Packet[index_start_point+i])!=0):
+				FS_Nodes_ask_order.append(ip)
+		
+		# Por o número de elementos ser par verificamos se o primeiro elemento da lista é um endereço IP
+		if ((ip := list_FS_Nodes_With_Packet[0])!=0):
+			FS_Nodes_ask_order.append(ip)
 	
-	# Ontem um dos pacotes do ficheiro
+	else:
+
+		# Percorre a lista a partir do ponto central, adicionando à lista os endereços IP
+		for i in range(1, index_start_point + 1, 1):
+
+			# Verifica se contêm um endereço ip nos índices i posições deslocados da posição inicial
+			if ((ip := list_FS_Nodes_With_Packet[index_start_point-i])!=0):
+				FS_Nodes_ask_order.append(ip)
+			if ((ip := list_FS_Nodes_With_Packet[index_start_point+i])!=0):
+				FS_Nodes_ask_order.append(ip)
+	
+	return FS_Nodes_ask_order
+
+
+
+"""
+Função que retorna um tuplo de dois elementos em que o primeiro elemento é o número de FS_Nodes que possuem
+o pacote que o FS_Node necessita e, o segundo elemento, é uma lista em que cada posição corresponde a um
+FS_Node, estando a 0 caso o FS_Node não possua o pacote pretendido e contendo o endereço IP caso contenha o
+pacote pretendido.
+"""
+def FS_Nodes_with_packet(FS_Nodes, packet_to_check):
+
+	# Lista com os FS_Nodes que possuem o pacote pretendido, estando a posição igual ao IP caso tenha o pacote e a 0 caso não tenha
+	list = [0] * FS_Nodes[0]
+
+	# Percorre todos os FS_Nodes à procura dos que têm o ficheiro
+	index = 0
+	for (ip, packets) in FS_Nodes[1:]:
+
+		# Verifica se o FS_Node tem o pacote
+		binary_to_compare = 1 << FS_Nodes[0] - packet_to_check - 1
+		if (binary_to_compare & packets > 0):
+			list[index] = ip
+		index += 1
+	
+	return list
+
+
+"""
+Função responsável por obter os pacotes do ficheiro. Esta começa por escolher um pacote para obter, determina
+qual o melhor FS_Node a quem pedir o pacote, tenta obter o pacote e, por fim, atualiza a informação da base de
+dados do FS_Node e atualiza o ficheiro correspondente ao pacote.
+
+Importnate salientar, que caso o timeout de espera para obter uma resposta de outro FS_Node seja ultrapassado 3
+vezes, é escolhido outro FS_Node a quem pedir o pacote. Caso não consiga obter o pacote de nenhum FS_Node então
+passa para outro pacote e no fim da transferência do ficheiro, avisa o utilizador que não foi possível obter
+o ficheiro completo.
+"""
+def get_file_Thread(s, send_lock, FS_Node_DB, FS_Nodes, fileName, priority_queue, index, lock_priority_queue):
+
+	# Cria um socket UDP para pedir os pacotes, tendo este um timeout de 2 segundos para prevenir esperas infinitas
+	client_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+	client_socket.settimeout(2.0)
+	
+	# Obtem um dos pacotes do ficheiro
 	lock_priority_queue.acquire()
 	while (index<len(priority_queue)):
 		packet_to_check = priority_queue[index]
@@ -136,127 +230,238 @@ def get_file_Thread(s, send_lock, FS_Node_DB, fileName, priority_queue, index, l
 		# Verifica se o FS_Node já possuí esse pacote
 		if (not FS_Node_DB.check_packet_file(fileName, packet_to_check)):
 
-			# Estabelece uma conxesão udp com o primeiro FS_Node que verifica que tem o pacote em falta e pede-lhe o pacote
-			server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-			server_address = ('localhost', 9090)
-			server_socket.bind(server_address)
+			# Determina quantos FS_Nodes e que FS_Nodes possuem o pacote
+			list_FS_Nodes_With_Packet = FS_Nodes_with_packet(FS_Nodes, packet_to_check)
 
+			# Determina a que FS_Nodes irá pedir os pacotes
+			FS_Nodes_ask_order = FS_Nodes_ask_order(list_FS_Nodes_With_Packet)
+			
+			for FS_Node_ip in FS_Nodes_ask_order:
 
+				# Pede o pacote ao FS_Node
+				FS_Node_address = (FS_Node_ip, 9090)
 
+				attempts = 0
+				while attempts < 3:
+					try:
+						# Pede o ficheiro
+						Message_Protocols.send_message_UDP(0, client_socket, fileName, FS_Node_address)
+						received_packet_size_bytes, _ = client_socket.recvfrom(4)
+						received_packet_size = int.from_bytes(received_packet_size_bytes, byteorder='big')
 
-			# Continuar esta parte amanhã
+						# Guarda numa variável o pacote recebido
+						packet = b''
+						while len(packet) < received_packet_size:
+							data = client_socket.recvfrom(received_packet_size - len(packet))
+							if not data:
+								return -1
+							packet += data
+						
+						# Verifica se o FS_Node não mandou uma mensagem vazia, significando que já não possuí o pacote
+						if received_packet_size > 0:
+						
+							# Guarda o pacote no ficheiro correspondente
+							with open(fileName, 'w') as file:
+								file.seek((index-1)*PACKET_SIZE)
+								file.write(data)
+							
+							# Guarda o pacote na base de dados do FS_Node
+							FS_Node_DB.update_packet(fileName, index-1)
 
+							# Informa o FS_Tracker da atualização
+							packet_update_index = 1 << len(priority_queue) - index - 2
+							message = (fileName, len(priority_queue), packet_update_index)
+							Message_Protocols.send_message_TCP(s, send_lock, message, True, 1)
+						
+						break
 
-
-
-
+					except socket.timeout:
+						attempts += 1
 
 		lock_priority_queue.acquire()
+	
+	lock_priority_queue.release()
+
+	# Fecha o socket UDP associado à transferência do ficheiro
+	client_socket.close()
 
 
 """
-
+Função responsável por fazer download de um ficheiro. Começa por pedir ao FS_Tracker os FS_Nodes que possuem pacotes
+do ficheiro que pretende obter e depois cria uma lista ordenada por ordem crescente dos pacotes mais comuns na rede.
+Por fim, cria X threads responsáveis por fazer o download do ficheiro.
 """
-def downloadFile(s, send_lock, threads_per_request, FS_Node_DB, fileName):
+def downloadFile(s, send_lock, write_lock, threads_per_request, FS_Node_DB, fileName):
 
-	# Pergunta ao FS_Tracker que FS_Nodes possuem informação sobre o ficheiro
+	# Pede ao FS_Tracker os FS_Nodes que possuem informação sobre o ficheiro
 	send_lock.acquire()
 	Message_Protocols.send_message(s, send_lock, fileName, True, 0)
-	FS_Nodes = Message_Protocols.recieve_message(s, 0)
+	FS_Nodes = Message_Protocols.recieve_message(s, False)
 	send_lock.release()
 
-	# Organiza a informação recebida pelos pacotes mais raros, sendo estes pedidos primeiro
-	priority_queue = FS_Node_DB.get_rarest_packets(FS_Nodes)
+	# Cria uma lista para guardar as threads
+	threads = []
 
-	# Cria um lock para assegurar que cada thread só acede a uma posição
-	index = 0
-	lock_priority_queue = threading.RLock()
+	if len(FS_Nodes)>0:
 
-	# Vai buscar os pacotes e guarda-os na base de dados do próprio FS_Node
-	for i in range(threads_per_request):
-		thread = threading.Thread(target=get_file_Thread, args=(s, send_lock, FS_Node_DB, fileName, priority_queue, index, lock_priority_queue))
-		thread.Start()
+		# Organiza a informação recebida pelos pacotes mais raros, sendo estes pedidos primeiro
+		priority_queue = FS_Node_DB.get_rarest_packets(FS_Nodes)
+
+		# Cria um lock para assegurar que cada thread só acede a uma posição
+		index = 0
+		lock_priority_queue = threading.RLock()
+
+		# Vai buscar os pacotes e guarda-os na base de dados do próprio FS_Node e atualiza os ficheiros do mesmo
+		for i in range(threads_per_request):
+			thread = threading.Thread(target=get_file_Thread, args=(s, send_lock, FS_Node_DB, FS_Nodes, fileName, priority_queue, index, lock_priority_queue))
+			thread.Start()
+			threads.append(thread)
+		
+		# Espera que todas as threads terminem de ir buscar os pacotes
+		for thread in threads:
+			thread.join()
+		
+		# Verifica se foi possível transferir o ficheiro completo
+		progress = FS_Node_DB.get_number_packets_completed(fileName)
+		if (progress[0]==progress[1]):
+			write_lock.acquire()
+			print(f"O ficheiro {fileName} já está completo.")
+			write_lock.release()
+		else:
+			write_lock.acquire()
+			print(f"Apenas foi possível obter {progress[0]} pacotes dos {progress[1]} pacotes totais.")
+			write_lock.release()
+
+	else:
+		write_lock.acquire()
+		print(f"Nenhum FS_Node possuí o ficheiro {fileName}.")
+		write_lock.release()
+
 
 """
-Função responsável por criar uma conexão TCP entre o FS_Node e o servidor (TCP), com verificação de exceção caso não seja possível estabeler a conexão.
-"""
-def connect_node(server_ip, server_port):
-    try:
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.connect((server_ip, server_port))
-        return s
-    except socket.error as e:
-        print(f"Error connecting to server: {e}")
-        return None
+Função responsável por fazer parsing do pedido do utilizador e executar o pedido correspondente. Caso o pedido seja
+"ls" então a thread imprime no ecrã os nomes de todos os ficheiros completos e incompletos que o FS_Node possuí. Caso
+o utilizador acrscente a flag -c, imprime apenas o nome dos ficheiros completos e se a flag acrescentada for -i,
+imprime apenas os incompletos. Se o utilizador fizer o pedido "check" então será imprimida a percentagem de um ficheiro
+à sua escolha ou então de todos os ficheiros, se pretender. Por fim, caso o pedido seja "get" a função chamará outra
+função responsável por obter o ficheiro pretendido.
 
-def requests_handler_thread(s, send_lock, threads_per_request, FS_Node_DB, user_input):
-	if (command := user_input.lower().strip().split())[0] == "get":
+Importante salientar que as escritas no ecrã são controladas por um lock de forma a não misturar escritas.
+"""
+def requests_handler_thread(s, send_lock, write_lock, threads_per_request, FS_Node_DB, user_input):
+	if (command := user_input.lower().strip().split())[0] == "get" and len(command)==2:
 		fileName = command[1]
-		downloadFile(s, send_lock, threads_per_request, FS_Node_DB, fileName)
-	elif (user_input.lower().strip()!="ls"):
+		downloadFile(s, send_lock, write_lock, threads_per_request, FS_Node_DB, fileName)
+	elif (user_input.lower().strip()=="ls"):
 		name_files = FS_Node_DB.get_files_names(0)
+		write_lock.acquire()
 		for name in name_files:
 			print(name + " ", end="")
-	elif (user_input.lower().strip()!="ls -c"):
+		write_lock.release()
+	elif (user_input.lower().strip()=="ls -c"):
 		name_files = FS_Node_DB.get_files_names(1)
+		write_lock.acquire()
 		for name in name_files:
 			print(name + " ", end="")
-	elif (user_input.lower().strip()!="ls -i"):
+		write_lock.release()
+	elif (user_input.lower().strip()=="ls -i"):
 		name_files = FS_Node_DB.get_files_names(2)
+		write_lock.acquire()
 		for name in name_files:
 			print(name + " ", end="")
-	elif (command := user_input.lower().strip().split())[0] == "check":
+		write_lock.release()
+	elif (command := user_input.lower().strip().split())[0] == "check" and len(command)==2:
 
 		# Função que imprime no terminal uma representação do estado da transferência de um ficheiro
 		if command[1]=="-all":
 			name_files = FS_Node_DB.get_files_names(0)
+			write_lock.acquire()
 			for name in name_files:
-				progress = FS_Node_DB.get_number_packets_completed(command[1])
+				progress = FS_Node_DB.get_number_packets_completed(name)
 				filled_blocks = int((progress[0] / progress[1]) * 50)
 				empty_blocks = 50 - filled_blocks
 				progress_bar = "█" * filled_blocks + "░" * empty_blocks
 				print(f"[{progress_bar}] {progress} out of {progress[1]}")
+			write_lock.release()
 		else:
 			progress = FS_Node_DB.get_number_packets_completed(command[1])
 			if (progress==-1):
+				write_lock.acquire()
 				print("File does not exist.")
+				write_lock.release()
 			else:
 				filled_blocks = int((progress[0] / progress[1]) * 50)
 				empty_blocks = 50 - filled_blocks
 				progress_bar = "█" * filled_blocks + "░" * empty_blocks
+				write_lock.acquire()
 				print(f"[{progress_bar}] {progress} out of {progress[1]}")
+				write_lock.release()
+	else:
 
-def Main(threads_per_request, dir, path_to_metadata="FS_Node_Files/"):
+		# Executa caso o comando introduzido pelo utilizador não exista, informando o mesmo que o comando não existe
+		write_lock.acquire()
+		print("Command not found.")
+		write_lock.release()
+
+
+"""
+Função responsável por receber os pedidos de pacotes de outros FS_Nodes e responder com o pacote pedido ou uma mensagem
+vazia a indicar que já não possuí o pacote pedido.
+"""
+def listener_thread():
+
+
+	ola = 0
+	# Completar
+
+	# Se não tiver o pacote manda uma mensagem vazia apenas com o tamanho da mesma, se tiver manda apenas o pacote com o tamanho da mesma antes
+
+
+
+
+
+
+def Main(threads_per_request, dir, path_to_metadata="FS_Node_Files/metadata.txt"):
 
 	# Lock para impedir duas escritas consecutivas no mesmo socket buffer
 	send_lock = threading.RLock()
 
-	# Inícia a base de dados do servidor e o lock associado ao mesmo
+	# Lock para escrever no terminal
+	write_lock = threading.RLock()
+
+	# Inícia a base de dados do FS_Node
 	FS_Node_DB = FS_Node_DataBase()
-
-	FS_Node_DB.load_existent_files("FS_Node_Files/")
 	
-	# Cria uma conexão TCP entre o FS_Node e o servidor (TCP) e informa o servidor dos ficheiros que possuí
+	# Estabelece uma conexão TCP entre o FS_Node
 	server_ip = '127.0.0.1'
-	server_port = 12345
+	server_port = 9090
+	s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+	s.connect((server_ip, server_port))
 
-	s = connect_node(server_ip, server_port)
+	# Popula a base de dados do FS_Node com os ficheiros que este possuí
 	initial_files = fetch_files(dir,path_to_metadata)
 	FS_Node_DB.add_files(initial_files)
 
+	# Envia para o FS_Tracker os ficheiros ou partes de ficheiros que possuí
 	Message_Protocols.send_message(s, send_lock, initial_files)
-		
+
 	# Sinal ativado quando o clinte termina o programa premindo ctrl+c
 	signal.signal(signal.SIGINT, lambda signum, frame: signal_handler(signum, frame, dir, FS_Node_DB))
 
+	# Criar thread que trata dos pedidos de outros FS_Nodes
+	thread = threading.Thread(target=listener_thread, args=())
+	thread.Start()
 
 	while True:	
 		user_input = input("FS_Node > ")
 
 		if (user_input.lower().strip()!="exit"):
-			thread = threading.Thread(target=requests_handler_thread, args=(s, send_lock, threads_per_request, FS_Node_DB, user_input))
+
+			# Cria uma thread que será responsável por executar um pedido do utilizador
+			thread = threading.Thread(target=requests_handler_thread, args=(s, send_lock, write_lock, threads_per_request, FS_Node_DB, user_input))
 			thread.Start()
 		else:
+
 			# Guarda os dados dos ficheiros do FS_Node num ficheiro de metadados
 			write_MTDados(dir, FS_Node_DB)
 
