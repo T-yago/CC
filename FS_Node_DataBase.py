@@ -36,9 +36,8 @@ class FS_Node_DataBase():
 	"""
 	def get_files(self):
 		files = []
-		for file, (lock, file_size, packets_owned) in self.files:
-			with lock.r_locked:
-				files.append((file, file_size, packets_owned))
+		for file, info in self.files.items():
+			files.append((file, info[1], info[2]))
 		
 		return files
 
@@ -51,6 +50,14 @@ class FS_Node_DataBase():
 			self.lock.acquire()
 			self.files[file] = [ReentrantRWLock(), num_packets, packets_owned]
 			self.lock.release()
+
+	"""
+	Função que remove um ficheiro da lista de ficheiros
+	"""
+	def remove_file(self, file):
+		self.lock.acquire()
+		del self.files[file]
+		self.lock.release()
 	
 
 	"""
@@ -58,11 +65,19 @@ class FS_Node_DataBase():
 	de um pacote.
 	"""
 	def update_packet(self, file, packet_index):
-		with self.files[file][0].w_locked:
-			packets_owned = self.files[file][2]
-			packet_update_index = 1 << self.files[file][1] - packet_index - 1
-			new_value = packets_owned ^ packet_update_index
-			self.files[file][2] = new_value
+		self.lock.acquire()
+		info = self.files.get(file)
+		self.lock.release()
+		
+		packet_update_index = 1 << info[1] - packet_index - 1
+		if info:
+			with info[0].w_locked():
+				packets_owned = info[2]
+				new_value = packets_owned ^ packet_update_index
+				if (new_value != pow(2, info[1]) - 1):
+					info[2] = new_value
+				else:
+					info[2] = -1
 
 
 	"""
@@ -70,9 +85,14 @@ class FS_Node_DataBase():
 	já possua o pacote e False caso não possua
 	"""
 	def check_packet_file(self, file, packet):
-		with self.files[file][0].r_locked:
-			binary_to_compare = 1 << self.files[file][1] - packet - 1
-			return (self.files[file][2] & binary_to_compare > 0)
+		self.lock.acquire()
+		info = self.files.get(file)
+		self.lock.release()
+
+		if info:
+			with info[0].r_locked():
+				binary_to_compare = 1 << info[1] - packet - 1
+				return (info[2] & binary_to_compare > 0)
 
 
 	"""
@@ -83,16 +103,22 @@ class FS_Node_DataBase():
 		names_files = []
 
 		if condition==0:
+			self.lock.acquire()
 			for file in self.files:
 				names_files.append(file)
+			self.lock.release()
 		elif condition==1:
-			for file, info in self.files:
-				if info[1]==-1:
+			self.lock.acquire()
+			for file, info in self.files.items():
+				if info[2]==-1:
 					names_files.append(file)
+			self.lock.release()
 		elif condition==2:
-			for file, info in self.files:
-				if info[1]!=-1:
+			self.lock.acquire()
+			for file, info in self.files.items():
+				if info[2]!=-1:
 					names_files.append(file)
+			self.lock.release()
 
 		return names_files
 
@@ -103,14 +129,39 @@ class FS_Node_DataBase():
 	ao número de pacotes em que o ficheiro está dividido.
 	"""
 	def get_number_packets_completed(self, file):
-		if (info := self.files.get(file)):
-			if (info[1]==-1):
-				return (info[1], info[1])
-			else:
-				completed_pcks = bin(info[1]).count('1')
-				return (completed_pcks, info[1])
+		self.lock.acquire()
+		info = self.files.get(file)
+		self.lock.release()
+
+		if info:
+			with info[0].r_locked():
+				if (info[2]==-1):
+					return (info[1], info[1])
+				else:
+					completed_pcks = bin(info[2]).count('1')
+					return (completed_pcks, info[1])
 		else:
 			return -1
+	
+	"""
+	Função que devolve o inteiro que corresponde aos pacotes que o FS_Node possuí de determinado ficheiro
+	"""
+	def get_packets_file(self, file):
+		self.lock.acquire()
+		info = self.files.get(file)
+		self.lock.release()
+
+		if info:
+			return info[2]
+		else:
+			return 0
+	
+
+	"""
+	Função que devolve o número total de pacotes que compõem determinado ficheiro
+	"""
+	def get_size_file(self, file):
+		return self.files.get(file)[1]
 
 
 	""""
@@ -127,15 +178,15 @@ class FS_Node_DataBase():
 	Por fim, cria uma nova lista, em que em cada posição se encontra o número do pacote, e ordena-a de acordo com a lista anterior,
 	ficando assim este ordenado por ordem crescente dos pacotes mais comuns.
 	"""
-	def get_rarest_packets (self, list) :
+	def get_rarest_packets (self, list_FS_Nodes) :
 
 		# Dicionário que contêm o número de FS_Nodes que possuem o pacote com aquele índice
-		packets = [0] * list[0]
+		packets = [0] * list_FS_Nodes[0]
 
 		# Percorrer os bits que corresponde a cada pacote do ficheiro
 		for i in range(len(packets)):
 			# Percorrer todos os FS_Nodes que possuem o ficheiro, nesse bit e calcular a soma desse bit
-			bit_sum = sum((node[1] >> i) & 1 for node in list[1:])
+			bit_sum = sum((node[1] >> i) & 1 for node in list_FS_Nodes[1:])
 			packets[i] = bit_sum
 
 		# Inverte a ordem do array, porque está ao contrário

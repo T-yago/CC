@@ -3,6 +3,7 @@ Ficheiro que contem algumas das funções relativas à troca de mensagens entre 
 """
 
 import json
+import socket
 
 
 
@@ -80,7 +81,7 @@ def send_message_TCP(c, send_lock, message, mode, id_mode=None):
             send_lock.acquire()
             c.sendall(length_bytes + json_message)
             send_lock.release()
-    finally:
+    except socket.error:
         c.close()
 
 
@@ -91,13 +92,24 @@ que o modo 0 envia em conjunto com os dados, informações adicionais de forma a
 o pacote pedido. No ínicio de cada mensagem é enviado ainda o tamanho da mesma, para o recetor ter a certeza da quantidade que tem
 de ler.
 """
-def send_message_UDP(mode, socket, data, destiny):
+def send_message_UDP(mode, socket, fileName, packet_index, packet, destiny):
     if (mode==0):
-        client_ip, client_port = socket.getsockname()
-        message = [client_ip, client_port, data]
+        message = [mode, fileName, packet_index]
         json_message = json.dumps(message).encode('utf-8')
     elif (mode==1):
-        json_message = json.dumps(data).encode('utf-8')
-    message_length = len(json_message)
-    length_bytes = message_length.to_bytes(4, byteorder='big')
-    socket.sendto(length_bytes + json_message, destiny)
+        json_message = json.dumps([mode, fileName + str(packet_index), packet]).encode('utf-8')
+    socket.sendto(json_message, destiny)
+
+
+"""
+
+"""
+def receive_message_UDP(socket):
+    message, sender_address = socket.recvfrom(2000)
+    message = json.loads(message.decode('utf-8'))
+    message.insert(1, sender_address)
+    
+    return message
+
+
+

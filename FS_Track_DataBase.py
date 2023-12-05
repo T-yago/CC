@@ -92,18 +92,17 @@ class FS_Tracker_DataBase():
 						index = self.addr_has_packets(file[0], addr)
 						if index == -1:
 							# Verifica se o ficheiro está completo
-							if (file[2] == -1):
+							if (file[2] == -1) or (file[1]==1):
 								with self.f_complete[file[0]][0].w_locked():
 									self.f_complete[file[0]].insert(self.f_complete[file[0]][1] + 3, addr)
 							else:
 								self.f_incomplete[file[0]].insert(self.f_incomplete[file[0]][1] + 3, [addr, file[2]])
-							self.lock.release()
 						else:
 							# Realizar a operação de ou exclusivo para fazer as adições e/ou deleções de pacotes de um ficheiro
 							xor = self.f_incomplete[file[0]][index][1] ^ file[2]
 							if (xor==0):
 								del self.f_incomplete[file[0]][index]
-							elif (xor==pow(2, 8 * file[1]) - 1):
+							elif (xor==pow(2, file[1]) - 1):
 								del self.f_incomplete[file[0]][index]
 								with self.f_complete[file[0]][0].w_locked():
 									self.f_complete[file[0]].insert(self.f_complete[file[0]][1] + 3, addr)
@@ -115,7 +114,7 @@ class FS_Tracker_DataBase():
 							self.f_complete[file[0]].remove(addr)
 					else:
 						# Realizar a operação de ou exclusivo para fazer as deleções de pacotes de um ficheiro completo
-						file_complete = pow(2, 8 * file[1]) - 1
+						file_complete = pow(2, file[1]) - 1
 						xor = file_complete ^ file[2]
 
 						# Passar para o dicionário de ficheiros incompletos
@@ -126,17 +125,17 @@ class FS_Tracker_DataBase():
 
 			# Adicionar a informação caso o FS_Node não tivesse nada relativo aquele ficheiro
 			else:
-				self.f_complete[file[0]] = [ReentrantRWLock(), 0, file[1], file[2]]
+				self.f_complete[file[0]] = [ReentrantRWLock(), 0, file[1]]
 				self.f_incomplete[file[0]] = [ReentrantRWLock(), 0, file[1]]
 				self.lock.release()
 
 				# Verifica se o Node possuí o ficheiro completo
 				if file[2] == -1:
-					with self.complete[file[0]][0].w_locked:
-						self.complete[file[0]].insert(self.f_complete[file[0]][1] + 3, addr)
+					with self.f_complete[file[0]][0].w_locked():
+						self.f_complete[file[0]].insert(self.f_complete[file[0]][1] + 3, addr)
 				# Adiciona um novo ficheiro incompleto caso contrário
 				else:
-					with self.f_incomplete[file[0]][0].w_locked:
+					with self.f_incomplete[file[0]][0].w_locked():
 						self.f_incomplete[file[0]].insert(self.f_incomplete[file[0]][1] + 3, [addr, file[2]])
 
 
@@ -192,12 +191,12 @@ class FS_Tracker_DataBase():
 						lista = list2[rotations_l2:] + list1 +  list2[:rotations_l2]
 
 					if (rotations_l1<len(list1)):
-						rotations_l1 += 1
+						self.f_complete[file][1] += 1
 					elif (rotations_l2<len(list2)-1):
-						rotations_l2 += 1
+						self.f_incomplete[file][1] += 1
 					else:
-						rotations_l1 = 0
-						rotations_l2 = 0
+						self.f_complete[file][1] = 0
+						self.f_incomplete[file][1] = 0
 		
 		return [self.f_complete[file][2]] + lista
 
@@ -216,9 +215,10 @@ class FS_Tracker_DataBase():
 			with self.f_complete[file][0].w_locked():
 
 				if addr in self.f_complete[file]:
+					index_addr = self.f_complete[file].index(addr) - 3
 					self.f_complete[file].remove(addr)
 
-					if (self.f_complete[file].index(addr)-3<self.f_complete[file][1]):
+					if (index_addr<self.f_complete[file][1]):
 						self.f_complete[file][1] -= 1
 		
 		for file in self.f_incomplete:
@@ -229,3 +229,25 @@ class FS_Tracker_DataBase():
 
 					if (index-3<self.f_incomplete[file][1]):
 						self.f_incomplete[file][1] -= 1
+	
+	"""
+	Função que devolve o número de pacotes que compõem determinado ficheiro
+	"""
+	def get_size_file(self, file):
+		return self.f_complete.get(file)[2]
+
+
+
+
+
+	def print_dic(self):
+		
+		print("----------Completos----------")
+		for file  in self.f_complete:
+			print(file)
+			print(self.f_complete[file])
+		print("----------Incompletos----------")
+		for file  in self.f_incomplete:
+			print(file)
+			print(self.f_incomplete[file])
+		print("")

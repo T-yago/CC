@@ -23,13 +23,24 @@ Importante realçar que a thread lê de uma lista que é partilhada com as threa
 Desta forma, as threads que realizam os pedidos escrevem para esta lista partilhada caso o pedido do FS_Node
 envolva uma escrita na memória.
 """
-def thread_for_store(FS_Tracker_DB, condition, data_to_store, addr):
+def thread_for_store(FS_Tracker_DB, data_to_store_lock, condition, data_to_store, addr):
+
     while True:
-        with condition:
+        with data_to_store_lock:
             while (len(data_to_store) == 0):
                 condition.wait()
             message = data_to_store.pop(0)
-        FS_Tracker_DB.update_information(addr, message[1])
+        if (message[0]==1):
+            FS_Tracker_DB.update_information(addr, message[1])
+            FS_Tracker_DB.print_dic()
+        elif (message[0]==2):
+            number_packets_file = FS_Tracker_DB.get_size_file(message[1][0])
+            packet_update_index = 1 << number_packets_file - message[1][1] - 1
+            FS_Tracker_DB.update_information(addr, [[message[1][0], number_packets_file, packet_update_index]])
+            FS_Tracker_DB.print_dic()
+        elif (message[0]==3):
+            number_packets_file = FS_Tracker_DB.get_size_file(message[1][0])
+            FS_Tracker_DB.update_information(addr, [[message[1][0], number_packets_file, message[1][1]]])
 
 
 """
@@ -44,13 +55,13 @@ de outras ao buffer do socket antes que a thread as consiga ler, é importante t
 mensagens, assegurando que não misturamos mensagens. Desta forma, os primeiros 4 bytes de todas as mensagens
 correspondem sempre a 1 inteiro de 4 bytes, que indica o tamanho da mensagem.
 """
-def request_Thread(c, FS_Tracker_DB, message, send_lock, data_to_store, condition):
+def request_Thread(c, FS_Tracker_DB, message, send_lock, data_to_store, data_to_store_lock, condition):
     if (message[0]==0):
         response = FS_Tracker_DB.get_file_owners(message[1])
         Message_Protocols.send_message_TCP(c, send_lock, response, False)
-    elif (message[0]==1):
-        with condition:
-            data_to_store.append(message[1])
+    else:
+        with data_to_store_lock:
+            data_to_store.append(message)
             condition.notify()
 
 
@@ -65,9 +76,9 @@ def client_thread(c, addr, FS_Tracker_DB):
 
     # Inicía a thread que será responsável por escrever as mensagens na base de dados do FS_Tracker e as variáveis necessárias
     data_to_store = []
-    lock = threading.Lock()
-    condition = threading.Condition(lock)
-    thread = threading.Thread(target=thread_for_store, args=(FS_Tracker_DB, c, condition, data_to_store, addr))
+    data_to_store_lock = threading.Lock()
+    condition = threading.Condition(data_to_store_lock)
+    thread = threading.Thread(target=thread_for_store, args=(FS_Tracker_DB, data_to_store_lock, condition, data_to_store, addr))
     thread.start()
 
     while True:
@@ -75,9 +86,10 @@ def client_thread(c, addr, FS_Tracker_DB):
         message = Message_Protocols.receive_message_TCP(c, True)
 
         if (message!=-1):
-            thread = threading.Thread(target=request_Thread, args=(c, FS_Tracker_DB, message, send_lock, data_to_store, condition))
+            thread = threading.Thread(target=request_Thread, args=(c, FS_Tracker_DB, message, send_lock, data_to_store, data_to_store_lock, condition))
             thread.start()
         else:
+            FS_Tracker_DB.remove_FS_node(addr)
             break
 
 	# Fechar a conexão
@@ -86,7 +98,7 @@ def client_thread(c, addr, FS_Tracker_DB):
 
 def Main():
 
-    host = '127.0.0.1'
+    host = "127.0.0.1"
     port = 9090
 
     # Cria o socket na porta correspondente para aceitar conexões de FS_Nodes

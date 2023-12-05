@@ -5,8 +5,8 @@ class ReentrantRWLock():
 
     def __init__(self):
         self.w_lock = threading.Lock()
-        self.r_lock = threading.Lock()
-        self.readers = 0
+        self.num_r_lock = threading.Lock()
+        self.num_r = 0
     
     def r_acquire(self):
         self.num_r_lock.acquire()
