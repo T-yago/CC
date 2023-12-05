@@ -435,7 +435,7 @@ def requests_handler_thread(s, send_lock_TCP, send_queue_UDP, send_queue_UDP_loc
 				write_lock.acquire()
 				print(f"{command[1]} -> [{progress_bar}] {progress} out of {progress[1]}")
 				write_lock.release()
-	elif (command := user_input.lower().strip().split())[0] == "delete" and len(command)==2:
+	elif (command := user_input.lower().strip().split())[0] == "delete" and ((command[1] == "-all" and len(command)==2) or ((command[1] == "-f" or command[1] == "-p") and len(command)==3)):
 		if command[1]=="-all":
 			files = FS_Node_DB.get_files()
 			for file in files:
