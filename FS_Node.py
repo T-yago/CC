@@ -2,6 +2,7 @@
 Ficheiro que executa o FS_Node.
 """
 
+
 import math
 import socket
 import threading
@@ -578,17 +579,35 @@ def UDP_sender_thread(socket_UDP, my_address, send_queue_UDP, send_queue_UDP_loc
 
 
 """
+Thread responsável por fazer a limpeza das entradas da cache quando estas já existem há mais de X tempo
+"""
+def Cache_cleaner_thread(replies_Dic, expire_time):
+
+	while True:
+		time.sleep(20)
+
+		# Determina o timestamp atual
+		timestamp = time.time()
+
+		# Percorre todas as entradas do dicionário e remove as que já existem há mais de X tempo
+		for key, info in replies_Dic.items():
+			if ((timestamp - info[0]) > expire_time):
+				del replies_Dic[key]
+
+
+
+"""
 
 """
 def Main():
 
 	# Vai buscar os argumentos fornecidos pelo cliente
-	if len(sys.argv) != 8:
+	if len(sys.argv) != 9:
 		print("Argumentos introduzidos errados.")
 		print("Formato Correto: python3 FS_Node.py Node_IP Node_Port Tracker_IP Tracker_Port threads_per_request files_path metadados_path")
 		return
 
-	Node_IP, Node_Port, Tracker_IP, Tracker_Port, threads_per_request, files_path, metadados_path = sys.argv[1:]
+	Node_IP, Node_Port, Tracker_IP, Tracker_Port, threads_per_request, files_path, metadados_path, expire_time = sys.argv[1:]
 
 	# Associa a pasta dos ficheiros do FS_Node correspondente
 	files_path += Node_Port + "/"
@@ -628,10 +647,12 @@ def Main():
 	replies_Dic = {}
 	replies_Dic_lock = threading.Lock()
 
-	# Cria as threads que serão responsáveis por gerir o socket UDP, uma para enviar e outra para receber dados
+	# Cria as threads que serão responsáveis por gerir o socket UDP, uma para enviar, outra para receber dados e outra para limpar a cache de pacotes
 	thread = threading.Thread(target=UDP_sender_thread, args=(socket_UDP, my_address, send_queue_UDP, send_queue_UDP_lock, send_queue_UDP_condition, replies_Dic, replies_Dic_lock))
 	thread.start()
 	thread = threading.Thread(target=UDP_listener_thread, args=(socket_UDP, send_queue_UDP, send_queue_UDP_lock, send_queue_UDP_condition, replies_Dic, files_path))
+	thread.start()
+	thread = threading.Thread(target=Cache_cleaner_thread, args=(replies_Dic, expire_time))
 	thread.start()
 
 	# Popula a base de dados do FS_Node com os ficheiros que este possuí

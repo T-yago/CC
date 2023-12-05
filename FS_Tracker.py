@@ -3,6 +3,7 @@ Ficheiro que executa o FS_Tracker.
 """
 
 import socket
+import sys
 import threading
 import Message_Protocols
 from FS_Track_DataBase import FS_Tracker_DataBase
@@ -98,12 +99,20 @@ def client_thread(c, addr, FS_Tracker_DB):
 
 def Main():
 
-    host = "127.0.0.1"
-    port = 9090
+    # Vai buscar os argumentos fornecidos pelo cliente
+    if len(sys.argv) != 3:
+        print("Argumentos introduzidos errados.")
+        print("Formato Correto: python3 FS_Tracker.py Tracker_IP Tracker_Port")
+        return
+
+    host, port = sys.argv[1:]
+
+    FS_Tracker_IP = host
+    Tracker_Port = int(port)
 
     # Cria o socket na porta correspondente para aceitar conexões de FS_Nodes
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.bind((host, port))
+    s.bind((FS_Tracker_IP, Tracker_Port))
     s.listen(5)
 
     # Inicía a base de dados do FS_Tracker
