@@ -42,6 +42,7 @@ def thread_for_store(FS_Tracker_DB, data_to_store_lock, condition, data_to_store
         elif (message[0]==3):
             number_packets_file = FS_Tracker_DB.get_size_file(message[1][0])
             FS_Tracker_DB.update_information(addr, [[message[1][0], number_packets_file, message[1][1]]])
+            FS_Tracker_DB.print_dic()
 
 
 """

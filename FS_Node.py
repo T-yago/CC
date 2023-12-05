@@ -436,7 +436,7 @@ def requests_handler_thread(s, send_lock_TCP, send_queue_UDP, send_queue_UDP_loc
 				write_lock.acquire()
 				print(f"{command[1]} -> [{progress_bar}] {progress} out of {progress[1]}")
 				write_lock.release()
-	elif (command := user_input.lower().strip().split())[0] == "delete" and ((command[1] == "-all" and len(command)==2) or ((command[1] == "-f" or command[1] == "-p") and len(command)==3)):
+	elif (command := user_input.lower().strip().split())[0] == "delete" and ((command[1] == "-all" and len(command)==2) or (command[1] == "-f" and len(command)==3) or (command[1] == "-p" and len(command)==4)):
 		if command[1]=="-all":
 			files = FS_Node_DB.get_files()
 			for file in files:
@@ -447,9 +447,12 @@ def requests_handler_thread(s, send_lock_TCP, send_queue_UDP, send_queue_UDP_loc
 		elif command[1] == "-f":
 			file = command[2]
 			packets = FS_Node_DB.get_packets_file(file)
-			Message_Protocols.send_message_TCP(s, send_lock_TCP, [file, packets], True, 3)
-			FS_Node_DB.remove_file(file)
-			os.remove(files_path + file)
+			if packets!=None:
+				Message_Protocols.send_message_TCP(s, send_lock_TCP, [file, packets], True, 3)
+				FS_Node_DB.remove_file(file)
+				os.remove(files_path + file)
+			else:
+				print("You don't have that file.")
 		elif command[1] == "-p":
 			file = command[2]
 			packet = int(command[3])
@@ -468,6 +471,20 @@ def requests_handler_thread(s, send_lock_TCP, send_queue_UDP, send_queue_UDP_loc
 				print("You inserted an invalid packet index.")
 		else:
 			print ("Invalid flag for the packet you chose.")
+	elif (command := user_input.lower().strip()) == "load new files":
+
+		# Verifica se o caminho passado existe e é uma diretoria
+		if os.path.exists(files_path) and os.path.isdir(files_path):
+
+			# Percorre os ficheiros à procura de novos
+			files_owned = FS_Node_DB.get_files_names(0)
+			for file_name in os.listdir(files_path):
+				file_path = os.path.join(files_path, file_name)
+				if os.path.isfile(file_path) and file_name not in files_owned:
+					file_size = os.path.getsize(file_path)
+					n_packets_file = math.ceil(file_size / PACKET_SIZE)
+					FS_Node_DB.add_files([[file_name, n_packets_file, -1]])
+					Message_Protocols.send_message_TCP(s, send_lock_TCP, [[file_name, n_packets_file, -1]], True, 1)
 	else:
 
 		# Executa caso o comando introduzido pelo utilizador não exista, informando o mesmo que o comando não existe
@@ -595,7 +612,6 @@ def Cache_cleaner_thread(replies_Dic, expire_time):
 				del replies_Dic[key]
 
 
-
 """
 
 """
@@ -614,9 +630,6 @@ def Main():
 
 	# Caminho para os metadados caso estes existam
 	path_to_metadata = metadados_path + "metadata" + Node_IP + Node_Port + ".txt"
-
-	# Lock para impedir duas escritas consecutivas no mesmo socket buffer
-	send_lock = threading.RLock()
 
 	# Lock para escrever no terminal
 	write_lock = threading.RLock()
@@ -660,7 +673,7 @@ def Main():
 	FS_Node_DB.add_files(initial_files)
 
 	# Envia para o FS_Tracker os ficheiros ou partes de ficheiros que possuí
-	Message_Protocols.send_message_TCP(s, send_lock, initial_files, True, 1)
+	Message_Protocols.send_message_TCP(s, send_lock_TCP, initial_files, True, 1)
 
 	# Sinal ativado quando o clinte termina o programa premindo ctrl+c
 	signal.signal(signal.SIGINT, lambda signum, frame: signal_handler(signum, frame, path_to_metadata, FS_Node_DB))

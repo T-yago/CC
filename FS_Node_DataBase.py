@@ -48,7 +48,8 @@ class FS_Node_DataBase():
 	def add_files(self, files):
 		for (file, num_packets, packets_owned) in files:
 			self.lock.acquire()
-			self.files[file] = [ReentrantRWLock(), num_packets, packets_owned]
+			if self.files.get(file)==None:
+				self.files[file] = [ReentrantRWLock(), num_packets, packets_owned]
 			self.lock.release()
 
 	"""
@@ -73,11 +74,16 @@ class FS_Node_DataBase():
 		if info:
 			with info[0].w_locked():
 				packets_owned = info[2]
-				new_value = packets_owned ^ packet_update_index
-				if (new_value != pow(2, info[1]) - 1):
-					info[2] = new_value
+				if packets_owned!=-1:
+					new_value = packets_owned ^ packet_update_index
+					if (new_value != pow(2, info[1]) - 1):
+						info[2] = new_value
+					else:
+						info[2] = -1
 				else:
-					info[2] = -1
+					packets_owned = pow(2, info[1]) - 1
+					new_value = packets_owned ^ packet_update_index
+					info[2] = new_value
 
 
 	"""
@@ -144,7 +150,8 @@ class FS_Node_DataBase():
 			return -1
 	
 	"""
-	Função que devolve o inteiro que corresponde aos pacotes que o FS_Node possuí de determinado ficheiro
+	Função que devolve o inteiro que corresponde aos pacotes que o FS_Node possuí de determinado ficheiro. Se não tiver o ficheiro
+	devolve None.
 	"""
 	def get_packets_file(self, file):
 		self.lock.acquire()
@@ -154,7 +161,7 @@ class FS_Node_DataBase():
 		if info:
 			return info[2]
 		else:
-			return 0
+			return None
 	
 
 	"""
