@@ -17,7 +17,7 @@ import IntegerInstance
 
 
 # Tamanho de cada pacote de um ficheiro
-PACKET_SIZE = 100
+PACKET_SIZE = 1024
 
 
 """
@@ -298,7 +298,7 @@ def get_file_Thread(s, send_lock_TCP, send_queue_UDP, send_queue_UDP_lock, send_
 						pass
 
 				# Escreve o pacote recebido para o ficheiro correspondente
-				with open(files_path + fileName, 'r+') as file:
+				with open(files_path + fileName, 'rb+') as file:
 					file.seek((meu_Index)*PACKET_SIZE)
 					file.write(packet)
 				
@@ -329,8 +329,7 @@ def downloadFile(s, send_lock_TCP, send_queue_UDP, send_queue_UDP_lock, send_que
 
 	# Cria uma lista para guardar as threads
 	threads = []
-
-	if len(FS_Nodes)>0:
+	if FS_Nodes!=None:
 		# Adiciona o ficheiro à lista de ficheiros, mas com 0 pacotes
 		FS_Node_DB.add_files([[fileName, FS_Nodes[0], 0]])
 
@@ -386,7 +385,7 @@ função responsável por obter o ficheiro pretendido.
 Importante salientar que as escritas no ecrã são controladas por um lock de forma a não misturar escritas.
 """
 def requests_handler_thread(s, send_lock_TCP, send_queue_UDP, send_queue_UDP_lock, send_queue_UDP_condition, replies_Dic, replies_Dic_lock, write_lock, threads_per_request, FS_Node_DB, files_path, user_input):
-	if (command := user_input.lower().strip().split())[0] == "get" and len(command)==2:
+	if (command := user_input.strip().split())[0].lower() == "get" and len(command)==2:
 		fileName = command[1]
 		downloadFile(s, send_lock_TCP, send_queue_UDP, send_queue_UDP_lock, send_queue_UDP_condition, replies_Dic, replies_Dic_lock, write_lock, threads_per_request, FS_Node_DB, files_path, fileName)
 	elif (user_input.lower().strip()=="ls"):
@@ -504,52 +503,53 @@ def UDP_listener_thread(socket_UDP, send_queue_UDP, send_queue_UDP_lock, send_qu
 		# Recebe um pedido
 		message = Message_Protocols.receive_message_UDP(socket_UDP)
 
-		# Verifica se é um pedido de pacote ou uma resposta a um pedido de pacote (0 se for um pedido, 1 se for uma resposta)
-		if message[0]==0:
-			destiny, fileName, packet_index = message[1:]
-		
-			# Verifica se o pacote pedido está no dicionário de pacotes
-			if (packet := replies_Dic.get(files_path + fileName))!=None and packet[3]!=None and len(packet[3])>0:
-
-				# Atualiza o timestamp associado ao pacote
-				packet[0] = time.time()
-				
-				# Adiciona o pacote à lista de mensagens a enviar para outros FS_Nodes
-				send_queue_UDP_lock.acquire()
-				send_queue_UDP.append([1, fileName, packet_index, packet, destiny])
-				send_queue_UDP_condition.notify()
-				send_queue_UDP_lock.release()
-
-			# Verifica se o ficheiro existe
-			elif (os.path.exists(files_path + fileName)):
-				
-				# Lê um pacote de um ficheiro
-				with open(files_path + fileName, 'rb') as file:
-					file.seek(packet_index * PACKET_SIZE)
-					packet = file.read(PACKET_SIZE).decode('utf-8', errors='replace')
-				
-				# Adiciona o pacote à lista de mensagens a enviar para outros FS_Nodes
-				send_queue_UDP_lock.acquire()
-				send_queue_UDP.append([1, fileName, packet_index, packet, destiny])
-				send_queue_UDP_condition.notify()
-				send_queue_UDP_lock.release()
-
-		elif message[0]==1:
-
-			fileName_packetNumber, data = message[2:]
-
-			# Atualiza o dicionário de pacotes recebidos e acorda a thread que estava à espera do pacote correspondente
-			value = replies_Dic.get(fileName_packetNumber)
+		if message!=-1:
+			# Verifica se é um pedido de pacote ou uma resposta a um pedido de pacote (0 se for um pedido, 1 se for uma resposta)
+			if message[0]==0:
+				destiny, fileName, packet_index = message[1:]
 			
-			# Verifica se o pacote não foi recebido anteriormente
-			if (value!=None and (value[3]==None or len(value[3])==0)):
-				value[0] = time.time()
-				value[3] = data
-			
-			# Avisa a thread caso esta já não tenha sido avisada
-			value[1].acquire()
-			value[2].notify()
-			value[1].release()
+				# Verifica se o pacote pedido está no dicionário de pacotes
+				if (packet := replies_Dic.get(files_path + fileName))!=None and packet[3]!=None and len(packet[3])>0:
+
+					# Atualiza o timestamp associado ao pacote
+					packet[0] = time.time()
+					
+					# Adiciona o pacote à lista de mensagens a enviar para outros FS_Nodes
+					send_queue_UDP_lock.acquire()
+					send_queue_UDP.append([1, fileName, packet_index, packet, destiny])
+					send_queue_UDP_condition.notify()
+					send_queue_UDP_lock.release()
+
+				# Verifica se o ficheiro existe
+				elif (os.path.exists(files_path + fileName)):
+					
+					# Lê um pacote de um ficheiro
+					with open(files_path + fileName, 'rb') as file:
+						file.seek(packet_index * PACKET_SIZE)
+						packet = file.read(PACKET_SIZE)
+					
+					# Adiciona o pacote à lista de mensagens a enviar para outros FS_Nodes
+					send_queue_UDP_lock.acquire()
+					send_queue_UDP.append([1, fileName, packet_index, packet, destiny])
+					send_queue_UDP_condition.notify()
+					send_queue_UDP_lock.release()
+
+			elif message[0]==1:
+
+				fileName_packetNumber, data = message[2:]
+
+				# Atualiza o dicionário de pacotes recebidos e acorda a thread que estava à espera do pacote correspondente
+				value = replies_Dic.get(fileName_packetNumber)
+				
+				# Verifica se o pacote não foi recebido anteriormente
+				if (value!=None and (value[3]==None or len(value[3])==0)):
+					value[0] = time.time()
+					value[3] = data
+				
+				# Avisa a thread caso esta já não tenha sido avisada
+				value[1].acquire()
+				value[2].notify()
+				value[1].release()
 
 
 """
@@ -598,7 +598,7 @@ def UDP_sender_thread(socket_UDP, my_address, send_queue_UDP, send_queue_UDP_loc
 """
 Thread responsável por fazer a limpeza das entradas da cache quando estas já existem há mais de X tempo
 """
-def Cache_cleaner_thread(replies_Dic, expire_time):
+def Cache_cleaner_thread(replies_Dic, replies_Dic_lock, expire_time):
 
 	while True:
 		time.sleep(20)
@@ -607,9 +607,11 @@ def Cache_cleaner_thread(replies_Dic, expire_time):
 		timestamp = time.time()
 
 		# Percorre todas as entradas do dicionário e remove as que já existem há mais de X tempo
+		replies_Dic_lock.acquire()
 		for key, info in replies_Dic.items():
 			if ((timestamp - info[0]) > expire_time):
 				del replies_Dic[key]
+		replies_Dic_lock.release()
 
 
 """
@@ -640,6 +642,7 @@ def Main():
 	Node_Port = int(Node_Port)
 	Tracker_Port = int(Tracker_Port)
 	threads_per_request = int(threads_per_request)
+	expire_time = int(expire_time)
 	# Estabelece uma conexão TCP entre o FS_Node e o FS_Tracker e cria um lock para controlar as leituras e escritas no socket TCP
 	server_ip = Tracker_IP
 	server_port = Tracker_Port
@@ -665,7 +668,7 @@ def Main():
 	thread.start()
 	thread = threading.Thread(target=UDP_listener_thread, args=(socket_UDP, send_queue_UDP, send_queue_UDP_lock, send_queue_UDP_condition, replies_Dic, files_path))
 	thread.start()
-	thread = threading.Thread(target=Cache_cleaner_thread, args=(replies_Dic, expire_time))
+	thread = threading.Thread(target=Cache_cleaner_thread, args=(replies_Dic, replies_Dic_lock, expire_time))
 	thread.start()
 
 	# Popula a base de dados do FS_Node com os ficheiros que este possuí

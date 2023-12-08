@@ -33,16 +33,13 @@ def thread_for_store(FS_Tracker_DB, data_to_store_lock, condition, data_to_store
             message = data_to_store.pop(0)
         if (message[0]==1):
             FS_Tracker_DB.update_information(addr, message[1])
-            FS_Tracker_DB.print_dic()
         elif (message[0]==2):
             number_packets_file = FS_Tracker_DB.get_size_file(message[1][0])
             packet_update_index = 1 << number_packets_file - message[1][1] - 1
             FS_Tracker_DB.update_information(addr, [[message[1][0], number_packets_file, packet_update_index]])
-            FS_Tracker_DB.print_dic()
         elif (message[0]==3):
             number_packets_file = FS_Tracker_DB.get_size_file(message[1][0])
             FS_Tracker_DB.update_information(addr, [[message[1][0], number_packets_file, message[1][1]]])
-            FS_Tracker_DB.print_dic()
 
 
 """
