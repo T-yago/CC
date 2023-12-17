@@ -100,12 +100,12 @@ def Main():
     # Vai buscar os argumentos fornecidos pelo cliente
     if len(sys.argv) != 3:
         print("Argumentos introduzidos errados.")
-        print("Formato Correto: python3 FS_Tracker.py Tracker_IP Tracker_Port")
+        print("Formato Correto: python3 FS_Tracker.py Tracker_Name Tracker_Port")
         return
 
-    host, port = sys.argv[1:]
+    host_Name, port = sys.argv[1:]
 
-    FS_Tracker_IP = host
+    FS_Tracker_IP = socket.gethostbyname(host_Name)
     Tracker_Port = int(port)
 
     # Cria o socket na porta correspondente para aceitar conexões de FS_Nodes
@@ -120,6 +120,7 @@ def Main():
 
         # Espera que os clientes se conectem
         c, addr = s.accept()
+        addr[1], _, _ = socket.gethostbyaddr(addr[1])
 
         # Cria uma thread que será responsável por gerrir a comunicação entre o FS_Tracker e um FS_Node
         thread = threading.Thread(target=client_thread, args=(c, addr, FS_Tracker_DB))

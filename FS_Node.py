@@ -207,17 +207,30 @@ def FS_Nodes_with_packet(FS_Nodes, packet_to_check):
 Função responsável por converter os elementos da lista de FS_Nodes enviada pelo Tracker aquando de um pedido
 de um ficheiro, do formato ["172.0.0.1", ["168.98.2.1", 7123]] para [["172.0.0.1", 8192], ["168.98.2.1", 7123]]
 """
-def convert_complete_FS_Nodes(FS_Nodes):
-    new_list = [FS_Nodes[0]]
+def convert_complete_FS_Nodes(FS_Nodes, cache_DNS):
+	new_list = [FS_Nodes[0]]
 
-    complete_value = pow(2, FS_Nodes[0]) - 1
-    for file in FS_Nodes[1:]:
-        if not isinstance(file[0], list):
-            new_list.append([tuple(file), complete_value])
-        else:
-            new_list.append([tuple[file[0]], file[1]])
-	
-    return new_list
+	complete_value = pow(2, FS_Nodes[0]) - 1
+	for file in FS_Nodes[1:]:
+		if not isinstance(file[0], list):
+
+			# Verifica se já está na cache
+			if file[0] in cache_DNS:
+				file_IP = cache_DNS[file[0]]
+			else:
+				file_IP, _, _ = socket.gethostbyaddr(file[0])
+				cache_DNS[file[0]] = file_IP
+			new_list.append([tuple((file_IP, file[1])), complete_value])
+		else:
+			# Verifica se já está na cache
+			if file[0][0] in cache_DNS:
+				file_IP = cache_DNS[file[0]]
+			else:
+				file_IP, _, _ = socket.gethostbyaddr(file[0][0])
+				cache_DNS[file[0][0]] = file_IP
+			new_list.append([tuple((file_IP, file[0][1])), file[1]])
+
+	return new_list
 
 
 """
@@ -319,7 +332,7 @@ Função responsável por fazer download de um ficheiro. Começa por pedir ao FS
 do ficheiro que pretende obter e depois cria uma lista ordenada por ordem crescente dos pacotes mais comuns na rede.
 Por fim, cria X threads responsáveis por fazer o download do ficheiro.
 """
-def downloadFile(s, send_lock_TCP, send_queue_UDP, send_queue_UDP_lock, send_queue_UDP_condition, replies_Dic, replies_Dic_lock, write_lock, threads_per_request, FS_Node_DB, files_path, fileName):
+def downloadFile(s, send_lock_TCP, send_queue_UDP, send_queue_UDP_lock, send_queue_UDP_condition, replies_Dic, replies_Dic_lock, write_lock, threads_per_request, FS_Node_DB, files_path, fileName, cache_DNS):
 
 	# Pede ao FS_Tracker os FS_Nodes que possuem informação sobre o ficheiro
 	send_lock_TCP.acquire()
@@ -334,7 +347,7 @@ def downloadFile(s, send_lock_TCP, send_queue_UDP, send_queue_UDP_lock, send_que
 		FS_Node_DB.add_files([[fileName, FS_Nodes[0], 0]])
 
 		# Converte as posições onde apenas tem um endereço IP, pois o ficheiro está completo, para um tuplo do mesmo formato se o ficheiro fosse completo (IP_address, packets)
-		FS_Nodes = convert_complete_FS_Nodes(FS_Nodes)
+		FS_Nodes = convert_complete_FS_Nodes(FS_Nodes, cache_DNS)
 
 		# Organiza a informação recebida pelos pacotes mais raros, sendo estes pedidos primeiro
 		priority_queue = FS_Node_DB.get_rarest_packets(FS_Nodes)
@@ -384,10 +397,10 @@ função responsável por obter o ficheiro pretendido.
 
 Importante salientar que as escritas no ecrã são controladas por um lock de forma a não misturar escritas.
 """
-def requests_handler_thread(s, send_lock_TCP, send_queue_UDP, send_queue_UDP_lock, send_queue_UDP_condition, replies_Dic, replies_Dic_lock, write_lock, threads_per_request, FS_Node_DB, files_path, user_input):
+def requests_handler_thread(s, send_lock_TCP, send_queue_UDP, send_queue_UDP_lock, send_queue_UDP_condition, replies_Dic, replies_Dic_lock, write_lock, threads_per_request, FS_Node_DB, files_path, user_input, cache_DNS):
 	if (command := user_input.strip().split())[0].lower() == "get" and len(command)==2:
 		fileName = command[1]
-		downloadFile(s, send_lock_TCP, send_queue_UDP, send_queue_UDP_lock, send_queue_UDP_condition, replies_Dic, replies_Dic_lock, write_lock, threads_per_request, FS_Node_DB, files_path, fileName)
+		downloadFile(s, send_lock_TCP, send_queue_UDP, send_queue_UDP_lock, send_queue_UDP_condition, replies_Dic, replies_Dic_lock, write_lock, threads_per_request, FS_Node_DB, files_path, fileName, cache_DNS)
 	elif (user_input.lower().strip()=="ls"):
 		name_files = FS_Node_DB.get_files_names(0)
 		write_lock.acquire()
@@ -622,10 +635,13 @@ def Main():
 	# Vai buscar os argumentos fornecidos pelo cliente
 	if len(sys.argv) != 9:
 		print("Argumentos introduzidos errados.")
-		print("Formato Correto: python3 FS_Node.py Node_IP Node_Port Tracker_IP Tracker_Port threads_per_request files_path metadados_path")
+		print("Formato Correto: python3 FS_Node.py Node_IP Node_Port Tracker_Name Tracker_Port threads_per_request files_path metadados_path")
 		return
 
-	Node_IP, Node_Port, Tracker_IP, Tracker_Port, threads_per_request, files_path, metadados_path, expire_time = sys.argv[1:]
+	Node_Name, Node_Port, Tracker_Name, Tracker_Port, threads_per_request, files_path, metadados_path, expire_time = sys.argv[1:]
+
+	# Vai buscar o Nome do node ao servidor DNS
+	Node_IP = socket.gethostbyname(Node_Name)
 
 	# Associa a pasta dos ficheiros do FS_Node correspondente
 	files_path += Node_Port + "/"
@@ -644,7 +660,7 @@ def Main():
 	threads_per_request = int(threads_per_request)
 	expire_time = int(expire_time)
 	# Estabelece uma conexão TCP entre o FS_Node e o FS_Tracker e cria um lock para controlar as leituras e escritas no socket TCP
-	server_ip = Tracker_IP
+	server_ip = socket.gethostbyname(Tracker_Name)
 	server_port = Tracker_Port
 	s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 	s.bind((Node_IP, Node_Port))
@@ -662,6 +678,9 @@ def Main():
 	send_queue_UDP_condition = threading.Condition(send_queue_UDP_lock)
 	replies_Dic = {}
 	replies_Dic_lock = threading.Lock()
+
+	# Cria a cache responsável por guardar os mapeamentos Nome->IP de pedidos ao servidor DNS anteriores
+	cache_DNS = {}
 
 	# Cria as threads que serão responsáveis por gerir o socket UDP, uma para enviar, outra para receber dados e outra para limpar a cache de pacotes
 	thread = threading.Thread(target=UDP_sender_thread, args=(socket_UDP, my_address, send_queue_UDP, send_queue_UDP_lock, send_queue_UDP_condition, replies_Dic, replies_Dic_lock))
@@ -687,7 +706,7 @@ def Main():
 		if (user_input.lower().strip()!="exit"):
 
 			# Cria uma thread que será responsável por executar um pedido do utilizador
-			thread = threading.Thread(target=requests_handler_thread, args=(s, send_lock_TCP, send_queue_UDP, send_queue_UDP_lock, send_queue_UDP_condition, replies_Dic, replies_Dic_lock, write_lock, threads_per_request, FS_Node_DB, files_path, user_input))
+			thread = threading.Thread(target=requests_handler_thread, args=(s, send_lock_TCP, send_queue_UDP, send_queue_UDP_lock, send_queue_UDP_condition, replies_Dic, replies_Dic_lock, write_lock, threads_per_request, FS_Node_DB, files_path, user_input, cache_DNS))
 			thread.start()
 		else:
 
